@@ -41,41 +41,33 @@ p = plot(G, 'Layout', 'force',...
 
 % 如果提供了深度信息，则根据深度设置节点颜色
 if nargin > 1 && isstruct(depth_info)
-    fprintf('\n');  % 只添加一个空行作为分隔
     % 深度0（源节点）- 红色
     if isfield(depth_info, 'depth0_nodes') && ~isempty(depth_info.depth0_nodes)
         highlight(p, depth_info.depth0_nodes, 'NodeColor', 'r');
-        fprintf('深度0节点: %s\n', mat2str(depth_info.depth0_nodes));
     end
     % 深度1 - 紫色
     if isfield(depth_info, 'depth1_nodes') && ~isempty(depth_info.depth1_nodes)
         highlight(p, depth_info.depth1_nodes, 'NodeColor', 'm');
-        fprintf('深度1节点: %s\n', mat2str(depth_info.depth1_nodes));
     end
     % 深度2 - 绿色
     if isfield(depth_info, 'depth2_nodes') && ~isempty(depth_info.depth2_nodes)
         highlight(p, depth_info.depth2_nodes, 'NodeColor', 'g');
-        fprintf('深度2节点: %s\n', mat2str(depth_info.depth2_nodes));
     end
     % 深度3 - 蓝色
     if isfield(depth_info, 'depth3_nodes') && ~isempty(depth_info.depth3_nodes)
         highlight(p, depth_info.depth3_nodes, 'NodeColor', 'b');
-        fprintf('深度3节点: %s\n', mat2str(depth_info.depth3_nodes));
     end
 end
 
 % 如果提供了拼接骨干树信息，则高亮边和节点
 if nargin > 2 && isstruct(spliced_depth_info)
-    fprintf('\n');  % 只添加一个空行作为分隔
     % 深度0（源节点）- 红色
     if isfield(spliced_depth_info, 'depth0_nodes') && ~isempty(spliced_depth_info.depth0_nodes)
         highlight(p, spliced_depth_info.depth0_nodes, 'NodeColor', 'r');
-        fprintf('拼接深度0节点: %s\n', mat2str(spliced_depth_info.depth0_nodes));
     end
     % 深度1 - 紫色，并高亮与深度0的连接边
     if isfield(spliced_depth_info, 'depth1_nodes') && ~isempty(spliced_depth_info.depth1_nodes)
         highlight(p, spliced_depth_info.depth1_nodes, 'NodeColor', 'm');
-        fprintf('拼接深度1节点: %s\n', mat2str(spliced_depth_info.depth1_nodes));
         % 高亮深度0到深度1的边
         temp_edges = [];
         for node1 = spliced_depth_info.depth1_nodes(:)'  % 确保是行向量
@@ -91,7 +83,6 @@ if nargin > 2 && isstruct(spliced_depth_info)
     % 深度2 - 绿色，并高亮与深度1的连接边
     if isfield(spliced_depth_info, 'depth2_nodes') && ~isempty(spliced_depth_info.depth2_nodes)
         highlight(p, spliced_depth_info.depth2_nodes, 'NodeColor', 'g');
-        fprintf('拼接深度2节点: %s\n', mat2str(spliced_depth_info.depth2_nodes));
         % 高亮深度1到深度2的边
         temp_edges = [];
         for node2 = spliced_depth_info.depth2_nodes(:)'  % 确保是行向量
@@ -107,7 +98,6 @@ if nargin > 2 && isstruct(spliced_depth_info)
     % 深度3 - 蓝色，并高亮与深度2的连接边
     if isfield(spliced_depth_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth3_nodes)
         highlight(p, spliced_depth_info.depth3_nodes, 'NodeColor', 'b');
-        fprintf('拼接深度3节点: %s\n', mat2str(spliced_depth_info.depth3_nodes));
         % 高亮深度2到深度3的边
         temp_edges = [];
         for node3 = spliced_depth_info.depth3_nodes(:)'  % 确保是行向量
@@ -124,15 +114,13 @@ end
 
 % 如果提供了简单拼接信息，则高亮显示简单拼接边
 if nargin > 3 && isstruct(simple_spliced_info)
-    fprintf('\n');  % 添加空行作为分隔
     % 高亮简单拼接的深度2节点（保持原有颜色，因为它们已经在depth_info中被标记为绿色）
     if isfield(simple_spliced_info, 'nodes') && ~isempty(simple_spliced_info.nodes)
-        fprintf('简单拼接深度2节点: %s\n', mat2str(simple_spliced_info.nodes));
+        highlight(p, simple_spliced_info.nodes, 'NodeColor', 'g');
     end
     % 高亮简单拼接得到的深度3节点（蓝色）
     if isfield(simple_spliced_info, 'depth3_nodes') && ~isempty(simple_spliced_info.depth3_nodes)
         highlight(p, simple_spliced_info.depth3_nodes, 'NodeColor', 'b');  % 使用蓝色高亮深度3节点
-        fprintf('简单拼接深度3节点: %s\n', mat2str(simple_spliced_info.depth3_nodes));
     end
     % 高亮简单拼接边（红色）
     if isfield(simple_spliced_info, 'edges') && ~isempty(simple_spliced_info.edges)
