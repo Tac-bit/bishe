@@ -99,7 +99,12 @@ if isstruct(spliced_depth_info)
         for node1 = spliced_depth_info.depth1_nodes(:)'
             for node0 = spliced_depth_info.depth0_nodes(:)'
                 if filtered_adj_mat(node0, node1) > 0
-                    highlight(p, [node0, node1], 'EdgeColor', 'r', 'LineWidth', 3);
+                    % 检查是否是拼接边
+                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+                        if any(ismember(spliced_depth_info.tree_edges, [node0, node1], 'rows'))
+                            highlight(p, [node0, node1], 'EdgeColor', 'r', 'LineWidth', 3);
+                        end
+                    end
                 end
             end
         end
@@ -111,7 +116,12 @@ if isstruct(spliced_depth_info)
         for node2 = spliced_depth_info.depth2_nodes(:)'
             for node1 = spliced_depth_info.depth1_nodes(:)'
                 if filtered_adj_mat(node1, node2) > 0
-                    highlight(p, [node1, node2], 'EdgeColor', 'r', 'LineWidth', 3);
+                    % 检查是否是拼接边
+                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+                        if any(ismember(spliced_depth_info.tree_edges, [node1, node2], 'rows'))
+                            highlight(p, [node1, node2], 'EdgeColor', 'r', 'LineWidth', 3);
+                        end
+                    end
                 end
             end
         end
@@ -123,7 +133,12 @@ if isstruct(spliced_depth_info)
         for node3 = spliced_depth_info.depth3_nodes(:)'
             for node2 = spliced_depth_info.depth2_nodes(:)'
                 if filtered_adj_mat(node2, node3) > 0
-                    highlight(p, [node2, node3], 'EdgeColor', 'r', 'LineWidth', 3);
+                    % 检查是否是拼接边
+                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+                        if any(ismember(spliced_depth_info.tree_edges, [node2, node3], 'rows'))
+                            highlight(p, [node2, node3], 'EdgeColor', 'r', 'LineWidth', 3);
+                        end
+                    end
                 end
             end
         end

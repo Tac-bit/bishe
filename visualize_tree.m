@@ -73,8 +73,13 @@ if nargin > 2 && isstruct(spliced_depth_info)
         for node1 = spliced_depth_info.depth1_nodes(:)'  % 确保是行向量
             for node0 = spliced_depth_info.depth0_nodes(:)'  % 确保是行向量
                 if filtered_adj_mat_copy(node0, node1) > 0
-                    highlight(p, [node0, node1], 'EdgeColor', 'r', 'LineWidth', 2.0);
-                    temp_edges = [temp_edges; node0, node1];
+                    % 检查是否是拼接边
+                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+                        if any(ismember(spliced_depth_info.tree_edges, [node0, node1], 'rows'))
+                            highlight(p, [node0, node1], 'EdgeColor', 'r', 'LineWidth', 2.0);
+                            temp_edges = [temp_edges; node0, node1];
+                        end
+                    end
                 end
             end
         end
@@ -88,8 +93,13 @@ if nargin > 2 && isstruct(spliced_depth_info)
         for node2 = spliced_depth_info.depth2_nodes(:)'  % 确保是行向量
             for node1 = spliced_depth_info.depth1_nodes(:)'  % 确保是行向量
                 if filtered_adj_mat_copy(node1, node2) > 0
-                    highlight(p, [node1, node2], 'EdgeColor', 'r', 'LineWidth', 2.0);
-                    temp_edges = [temp_edges; node1, node2];
+                    % 检查是否是拼接边
+                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+                        if any(ismember(spliced_depth_info.tree_edges, [node1, node2], 'rows'))
+                            highlight(p, [node1, node2], 'EdgeColor', 'r', 'LineWidth', 2.0);
+                            temp_edges = [temp_edges; node1, node2];
+                        end
+                    end
                 end
             end
         end
@@ -103,8 +113,13 @@ if nargin > 2 && isstruct(spliced_depth_info)
         for node3 = spliced_depth_info.depth3_nodes(:)'  % 确保是行向量
             for node2 = spliced_depth_info.depth2_nodes(:)'  % 确保是行向量
                 if filtered_adj_mat_copy(node2, node3) > 0
-                    highlight(p, [node2, node3], 'EdgeColor', 'r', 'LineWidth', 2.0);
-                    temp_edges = [temp_edges; node2, node3];
+                    % 检查是否是拼接边
+                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+                        if any(ismember(spliced_depth_info.tree_edges, [node2, node3], 'rows'))
+                            highlight(p, [node2, node3], 'EdgeColor', 'r', 'LineWidth', 2.0);
+                            temp_edges = [temp_edges; node2, node3];
+                        end
+                    end
                 end
             end
         end
