@@ -1,4 +1,4 @@
-function visualize_all_trees(filtered_adj_mat, depth_info, spliced_depth_info, simple_spliced_info, pruned_tree_mat)
+function visualize_all_trees(filtered_adj_mat, depth_info, spliced_depth_info, simple_spliced_info, pruned_tree_mat, varargin)
 % 在过滤拓扑上可视化所有树结构
 % 输入:
 %   filtered_adj_mat: Metro_filter过滤后的邻接矩阵
@@ -14,7 +14,16 @@ function visualize_all_trees(filtered_adj_mat, depth_info, spliced_depth_info, s
 %       simple_spliced_info.edges: 拼接边
 %       simple_spliced_info.depth3_nodes: 拼接得到的深度3节点
 %   pruned_tree_mat: 修剪后的骨干树邻接矩阵
+%   varargin: 可选参数，可以包含secondary_spliced_info
 
+% ===================== 1. 参数处理 =====================
+% 处理可选参数
+secondary_spliced_info = [];
+if nargin > 5
+    secondary_spliced_info = varargin{1};
+end
+
+% ===================== 2. 创建基础图 =====================
 % 创建图对象
 G = graph(filtered_adj_mat);
 
@@ -30,161 +39,108 @@ p.MarkerSize = 8;   % 设置节点大小
 p.NodeFontSize = 12;  % 设置节点标签字体大小
 p.LineStyle = '-';  % 设置所有边为实线
 
-% 高亮骨干树的边（淡蓝色）
-for i = 1:size(pruned_tree_mat, 1)
-    for j = i+1:size(pruned_tree_mat, 1)
-        if pruned_tree_mat(i,j) > 0
-            edge_idx = findedge(G, i, j);
-            if edge_idx > 0
-                highlight(p, i, j, 'EdgeColor', [0.6 0.8 1.0], 'LineWidth', 3, 'LineStyle', '-');
-            end
-        end
-    end
-end
-
-% 设置节点颜色（按深度）
+% ===================== 3. 高亮骨干树 =====================
 if isstruct(depth_info)
-    % 深度0（源节点）- 红色，更大的尺寸
+    % 深度0（源节点）- 红色
     if isfield(depth_info, 'depth0_nodes') && ~isempty(depth_info.depth0_nodes)
-        highlight(p, depth_info.depth0_nodes, 'NodeColor', 'r', 'MarkerSize', 12);  % 增大源节点尺寸
+        highlight(p, depth_info.depth0_nodes, 'NodeColor', 'r', 'MarkerSize', 12);
     end
     % 深度1 - 紫色
     if isfield(depth_info, 'depth1_nodes') && ~isempty(depth_info.depth1_nodes)
         highlight(p, depth_info.depth1_nodes, 'NodeColor', [0.5 0 0.5]);
-        % 高亮深度0到深度1的边
-        for node1 = depth_info.depth1_nodes(:)'
-            for node0 = depth_info.depth0_nodes(:)'
-                if pruned_tree_mat(node0, node1) > 0
-                    highlight(p, [node0, node1], 'EdgeColor', [0.6 0.8 1.0], 'LineWidth', 3, 'LineStyle', '-');
-                end
-            end
-        end
     end
     % 深度2 - 绿色
     if isfield(depth_info, 'depth2_nodes') && ~isempty(depth_info.depth2_nodes)
         highlight(p, depth_info.depth2_nodes, 'NodeColor', 'g');
-        % 高亮深度1到深度2的边
-        for node2 = depth_info.depth2_nodes(:)'
-            for node1 = depth_info.depth1_nodes(:)'
-                if pruned_tree_mat(node1, node2) > 0
-                    highlight(p, [node1, node2], 'EdgeColor', [0.6 0.8 1.0], 'LineWidth', 3, 'LineStyle', '-');
-                end
-            end
-        end
     end
     % 深度3 - 蓝色
     if isfield(depth_info, 'depth3_nodes') && ~isempty(depth_info.depth3_nodes)
         highlight(p, depth_info.depth3_nodes, 'NodeColor', 'b');
-        % 高亮深度2到深度3的边
-        for node3 = depth_info.depth3_nodes(:)'
-            for node2 = depth_info.depth2_nodes(:)'
-                if pruned_tree_mat(node2, node3) > 0
-                    highlight(p, [node2, node3], 'EdgeColor', [0.6 0.8 1.0], 'LineWidth', 3, 'LineStyle', '-');
-                end
+    end
+    
+    % 高亮骨干树边（淡蓝色）
+    for i = 1:size(pruned_tree_mat, 1)
+        for j = i+1:size(pruned_tree_mat, 1)
+            if pruned_tree_mat(i,j) > 0
+                highlight(p, [i, j], 'EdgeColor', [0.6 0.8 1.0], 'LineWidth', 3, 'LineStyle', '-');
             end
         end
     end
 end
 
-% 设置拼接树节点颜色（按深度）
+% ===================== 4. 高亮拼接骨干树 =====================
 if isstruct(spliced_depth_info)
     % 深度0（源节点）- 红色
     if isfield(spliced_depth_info, 'depth0_nodes') && ~isempty(spliced_depth_info.depth0_nodes)
         highlight(p, spliced_depth_info.depth0_nodes, 'NodeColor', 'r', 'MarkerSize', 12);
     end
-    % 深度1 - 紫色，并高亮与深度0的连接边
+    % 深度1 - 紫色
     if isfield(spliced_depth_info, 'depth1_nodes') && ~isempty(spliced_depth_info.depth1_nodes)
         highlight(p, spliced_depth_info.depth1_nodes, 'NodeColor', [0.5 0 0.5]);
-        % 高亮深度0到深度1的边
-        for node1 = spliced_depth_info.depth1_nodes(:)'
-            for node0 = spliced_depth_info.depth0_nodes(:)'
-                if filtered_adj_mat(node0, node1) > 0
-                    % 检查是否是拼接边
-                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-                        if any(ismember(spliced_depth_info.tree_edges, [node0, node1], 'rows'))
-                            highlight(p, [node0, node1], 'EdgeColor', 'r', 'LineWidth', 3);
-                        end
-                    end
-                end
-            end
-        end
     end
-    % 深度2 - 绿色，并高亮与深度1的连接边
+    % 深度2 - 绿色
     if isfield(spliced_depth_info, 'depth2_nodes') && ~isempty(spliced_depth_info.depth2_nodes)
         highlight(p, spliced_depth_info.depth2_nodes, 'NodeColor', 'g');
-        % 高亮深度1到深度2的边
-        for node2 = spliced_depth_info.depth2_nodes(:)'
-            for node1 = spliced_depth_info.depth1_nodes(:)'
-                if filtered_adj_mat(node1, node2) > 0
-                    % 检查是否是拼接边
-                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-                        if any(ismember(spliced_depth_info.tree_edges, [node1, node2], 'rows'))
-                            highlight(p, [node1, node2], 'EdgeColor', 'r', 'LineWidth', 3);
-                        end
-                    end
-                end
-            end
-        end
     end
-    % 深度3 - 蓝色，并高亮与深度2的连接边
+    % 深度3 - 蓝色
     if isfield(spliced_depth_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth3_nodes)
         highlight(p, spliced_depth_info.depth3_nodes, 'NodeColor', 'b');
-        % 高亮深度2到深度3的边
-        for node3 = spliced_depth_info.depth3_nodes(:)'
-            for node2 = spliced_depth_info.depth2_nodes(:)'
-                if filtered_adj_mat(node2, node3) > 0
-                    % 检查是否是拼接边
-                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-                        if any(ismember(spliced_depth_info.tree_edges, [node2, node3], 'rows'))
-                            highlight(p, [node2, node3], 'EdgeColor', 'r', 'LineWidth', 3);
-                        end
-                    end
-                end
-            end
+    end
+    
+    % 高亮拼接骨干树边（红色）
+    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+        for i = 1:size(spliced_depth_info.tree_edges, 1)
+            edge = spliced_depth_info.tree_edges(i, :);
+            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
         end
     end
 end
 
-% 高亮拼接树中深度2节点的拼接边
-if isfield(spliced_depth_info, 'depth2_spliced_info') && ~isempty(spliced_depth_info.depth2_spliced_info.edges)
-    for i = 1:size(spliced_depth_info.depth2_spliced_info.edges, 1)
-        edge = spliced_depth_info.depth2_spliced_info.edges(i, :);
-        edge_idx = findedge(G, edge(1), edge(2));
-        if edge_idx > 0
-            highlight(p, edge(1), edge(2), 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+% ===================== 5. 高亮次级拼接 =====================
+if ~isempty(secondary_spliced_info) && isstruct(secondary_spliced_info)
+    % 高亮次级拼接的深度1节点（紫色）
+    if isfield(secondary_spliced_info, 'nodes') && ~isempty(secondary_spliced_info.nodes)
+        highlight(p, secondary_spliced_info.nodes, 'NodeColor', [0.5 0 0.5]);
+    end
+    % 高亮次级拼接的深度2节点（绿色）
+    if isfield(secondary_spliced_info, 'depth2_nodes') && ~isempty(secondary_spliced_info.depth2_nodes)
+        highlight(p, secondary_spliced_info.depth2_nodes, 'NodeColor', 'g');
+    end
+    % 高亮次级拼接的深度3节点（蓝色）
+    if isfield(secondary_spliced_info, 'depth3_nodes') && ~isempty(secondary_spliced_info.depth3_nodes)
+        highlight(p, secondary_spliced_info.depth3_nodes, 'NodeColor', 'b');
+    end
+    
+    % 高亮次级拼接边（红色）
+    if isfield(secondary_spliced_info, 'edges') && ~isempty(secondary_spliced_info.edges)
+        for i = 1:size(secondary_spliced_info.edges, 1)
+            edge = secondary_spliced_info.edges(i, :);
+            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
         end
     end
 end
 
-% 高亮简单拼接的边和节点
+% ===================== 6. 高亮简单拼接 =====================
 if isstruct(simple_spliced_info)
-    % 高亮简单拼接得到的深度3节点（蓝色）
+    % 高亮简单拼接的深度2节点（绿色）
+    if isfield(simple_spliced_info, 'nodes') && ~isempty(simple_spliced_info.nodes)
+        highlight(p, simple_spliced_info.nodes, 'NodeColor', 'g');
+    end
+    % 高亮简单拼接的深度3节点（蓝色）
     if isfield(simple_spliced_info, 'depth3_nodes') && ~isempty(simple_spliced_info.depth3_nodes)
         highlight(p, simple_spliced_info.depth3_nodes, 'NodeColor', 'b');
     end
-    % 高亮简单拼接边（红色实线）
+    
+    % 高亮简单拼接边（红色）
     if isfield(simple_spliced_info, 'edges') && ~isempty(simple_spliced_info.edges)
         for i = 1:size(simple_spliced_info.edges, 1)
             edge = simple_spliced_info.edges(i, :);
-            edge_idx = findedge(G, edge(1), edge(2));
-            if edge_idx > 0
-                highlight(p, edge(1), edge(2), 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
-            end
+            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
         end
     end
 end
 
-% 高亮拼接树的边
-if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-    for i = 1:size(spliced_depth_info.tree_edges, 1)
-        edge = spliced_depth_info.tree_edges(i, :);
-        edge_idx = findedge(G, edge(1), edge(2));
-        if edge_idx > 0
-            highlight(p, edge(1), edge(2), 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
-        end
-    end
-end
-
+% ===================== 7. 添加标签和图例 =====================
 % 显示节点标签
 labelnode(p, 1:numnodes(G), 1:numnodes(G));
 
@@ -208,6 +164,7 @@ lgd = legend('Location', 'eastoutside');
 set(lgd, 'FontSize', 10);
 hold off;
 
+% ===================== 8. 美化图形 =====================
 % 添加标题
 title('综合树结构可视化', 'FontSize', 16, 'FontWeight', 'bold');
 

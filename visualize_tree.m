@@ -21,16 +21,18 @@ function [highlighted_edges] = visualize_tree(filtered_adj_mat_copy, depth_info,
 %       highlighted_edges.depth2_to_3: 深度2到深度3的边 [node2, node3]
 %       highlighted_edges.simple_splice_edges: 简单拼接边 [source_points, target_points]
 
+% ===================== 1. 初始化 =====================
 % 初始化边信息结构体
 highlighted_edges = struct('depth0_to_1', [], 'depth1_to_2', [], 'depth2_to_3', [], 'simple_splice_edges', []);
 
+% ===================== 2. 创建基础图 =====================
 % 创建图对象
 G = graph(filtered_adj_mat_copy);
 
 % 创建新图形窗口
 figure('Name', '特殊过滤后的拓扑结构', 'Position', [100, 100, 1000, 800]);
 
-% 绘制拓扑图
+% 绘制基础拓扑图
 p = plot(G, 'Layout', 'force',...
     'UseGravity', true, ...
     'NodeColor', [0.6 0.6 0.6], ...  % 默认节点颜色为浅灰色
@@ -39,15 +41,16 @@ p = plot(G, 'Layout', 'force',...
     'LineWidth', 2.0, ...            % 加粗边线
     'EdgeAlpha', 0.7);               % 边透明度
 
-% 如果提供了深度信息，则根据深度设置节点颜色
+% ===================== 3. 高亮骨干树节点 =====================
+% 使用从analyze_pruned_tree.m获取的depth_info信息
 if nargin > 1 && isstruct(depth_info)
     % 深度0（源节点）- 红色
     if isfield(depth_info, 'depth0_nodes') && ~isempty(depth_info.depth0_nodes)
-        highlight(p, depth_info.depth0_nodes, 'NodeColor', 'r');
+        highlight(p, depth_info.depth0_nodes, 'NodeColor', 'r', 'MarkerSize', 12);
     end
     % 深度1 - 紫色
     if isfield(depth_info, 'depth1_nodes') && ~isempty(depth_info.depth1_nodes)
-        highlight(p, depth_info.depth1_nodes, 'NodeColor', 'm');
+        highlight(p, depth_info.depth1_nodes, 'NodeColor', [0.5 0 0.5]);
     end
     % 深度2 - 绿色
     if isfield(depth_info, 'depth2_nodes') && ~isempty(depth_info.depth2_nodes)
@@ -59,93 +62,83 @@ if nargin > 1 && isstruct(depth_info)
     end
 end
 
-% 如果提供了拼接骨干树信息，则高亮边和节点
+% ===================== 4. 高亮拼接骨干树 =====================
+% 使用从analyze_pruned_tree.m获取的spliced_depth_info信息
 if nargin > 2 && isstruct(spliced_depth_info)
     % 深度0（源节点）- 红色
     if isfield(spliced_depth_info, 'depth0_nodes') && ~isempty(spliced_depth_info.depth0_nodes)
-        highlight(p, spliced_depth_info.depth0_nodes, 'NodeColor', 'r');
+        highlight(p, spliced_depth_info.depth0_nodes, 'NodeColor', 'r', 'MarkerSize', 12);
     end
-    % 深度1 - 紫色，并高亮与深度0的连接边
+    % 深度1 - 紫色
     if isfield(spliced_depth_info, 'depth1_nodes') && ~isempty(spliced_depth_info.depth1_nodes)
-        highlight(p, spliced_depth_info.depth1_nodes, 'NodeColor', 'm');
-        % 高亮深度0到深度1的边
-        temp_edges = [];
-        for node1 = spliced_depth_info.depth1_nodes(:)'  % 确保是行向量
-            for node0 = spliced_depth_info.depth0_nodes(:)'  % 确保是行向量
-                if filtered_adj_mat_copy(node0, node1) > 0
-                    % 检查是否是拼接边
-                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-                        if any(ismember(spliced_depth_info.tree_edges, [node0, node1], 'rows'))
-                            highlight(p, [node0, node1], 'EdgeColor', 'r', 'LineWidth', 2.0);
-                            temp_edges = [temp_edges; node0, node1];
-                        end
-                    end
-                end
-            end
-        end
-        highlighted_edges.depth0_to_1 = temp_edges;
+        highlight(p, spliced_depth_info.depth1_nodes, 'NodeColor', [0.5 0 0.5]);
     end
-    % 深度2 - 绿色，并高亮与深度1的连接边
+    % 深度2 - 绿色
     if isfield(spliced_depth_info, 'depth2_nodes') && ~isempty(spliced_depth_info.depth2_nodes)
         highlight(p, spliced_depth_info.depth2_nodes, 'NodeColor', 'g');
-        % 高亮深度1到深度2的边
-        temp_edges = [];
-        for node2 = spliced_depth_info.depth2_nodes(:)'  % 确保是行向量
-            for node1 = spliced_depth_info.depth1_nodes(:)'  % 确保是行向量
-                if filtered_adj_mat_copy(node1, node2) > 0
-                    % 检查是否是拼接边
-                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-                        if any(ismember(spliced_depth_info.tree_edges, [node1, node2], 'rows'))
-                            highlight(p, [node1, node2], 'EdgeColor', 'r', 'LineWidth', 2.0);
-                            temp_edges = [temp_edges; node1, node2];
-                        end
-                    end
-                end
-            end
-        end
-        highlighted_edges.depth1_to_2 = temp_edges;
     end
-    % 深度3 - 蓝色，并高亮与深度2的连接边
+    % 深度3 - 蓝色
     if isfield(spliced_depth_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth3_nodes)
         highlight(p, spliced_depth_info.depth3_nodes, 'NodeColor', 'b');
-        % 高亮深度2到深度3的边
-        temp_edges = [];
-        for node3 = spliced_depth_info.depth3_nodes(:)'  % 确保是行向量
-            for node2 = spliced_depth_info.depth2_nodes(:)'  % 确保是行向量
-                if filtered_adj_mat_copy(node2, node3) > 0
-                    % 检查是否是拼接边
-                    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-                        if any(ismember(spliced_depth_info.tree_edges, [node2, node3], 'rows'))
-                            highlight(p, [node2, node3], 'EdgeColor', 'r', 'LineWidth', 2.0);
-                            temp_edges = [temp_edges; node2, node3];
-                        end
-                    end
-                end
-            end
+    end
+    
+    % 高亮拼接骨干树边（红色）
+    if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
+        for i = 1:size(spliced_depth_info.tree_edges, 1)
+            edge = spliced_depth_info.tree_edges(i, :);
+            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
         end
-        highlighted_edges.depth2_to_3 = temp_edges;
     end
 end
 
-% 如果提供了简单拼接信息，则高亮显示简单拼接边
+% ===================== 5. 高亮次级拼接 =====================
+% 使用从analyze_pruned_tree.m获取的secondary_spliced_info信息
+if nargin > 2 && isstruct(spliced_depth_info) && isfield(spliced_depth_info, 'depth2_spliced_info')
+    % 高亮次级拼接的深度1节点（紫色）
+    if isfield(spliced_depth_info.depth2_spliced_info, 'nodes') && ~isempty(spliced_depth_info.depth2_spliced_info.nodes)
+        highlight(p, spliced_depth_info.depth2_spliced_info.nodes, 'NodeColor', [0.5 0 0.5]);
+    end
+    % 高亮次级拼接的深度2节点（绿色）
+    if isfield(spliced_depth_info.depth2_spliced_info, 'depth2_nodes') && ~isempty(spliced_depth_info.depth2_spliced_info.depth2_nodes)
+        highlight(p, spliced_depth_info.depth2_spliced_info.depth2_nodes, 'NodeColor', 'g');
+    end
+    % 高亮次级拼接的深度3节点（蓝色）
+    if isfield(spliced_depth_info.depth2_spliced_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth2_spliced_info.depth3_nodes)
+        highlight(p, spliced_depth_info.depth2_spliced_info.depth3_nodes, 'NodeColor', 'b');
+    end
+    
+    % 高亮次级拼接边（红色）
+    if isfield(spliced_depth_info.depth2_spliced_info, 'edges') && ~isempty(spliced_depth_info.depth2_spliced_info.edges)
+        for i = 1:size(spliced_depth_info.depth2_spliced_info.edges, 1)
+            edge = spliced_depth_info.depth2_spliced_info.edges(i, :);
+            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+        end
+    end
+end
+
+% ===================== 6. 高亮简单拼接 =====================
+% 使用从analyze_pruned_tree.m获取的simple_spliced_info信息
 if nargin > 3 && isstruct(simple_spliced_info)
-    % 高亮简单拼接的深度2节点（保持原有颜色，因为它们已经在depth_info中被标记为绿色）
+    % 高亮简单拼接的深度2节点（绿色）
     if isfield(simple_spliced_info, 'nodes') && ~isempty(simple_spliced_info.nodes)
         highlight(p, simple_spliced_info.nodes, 'NodeColor', 'g');
     end
-    % 高亮简单拼接得到的深度3节点（蓝色）
+    % 高亮简单拼接的深度3节点（蓝色）
     if isfield(simple_spliced_info, 'depth3_nodes') && ~isempty(simple_spliced_info.depth3_nodes)
-        highlight(p, simple_spliced_info.depth3_nodes, 'NodeColor', 'b');  % 使用蓝色高亮深度3节点
+        highlight(p, simple_spliced_info.depth3_nodes, 'NodeColor', 'b');
     end
+    
     % 高亮简单拼接边（红色）
     if isfield(simple_spliced_info, 'edges') && ~isempty(simple_spliced_info.edges)
         for i = 1:size(simple_spliced_info.edges, 1)
-            highlight(p, [simple_spliced_info.edges(i,1), simple_spliced_info.edges(i,2)], 'EdgeColor', 'r', 'LineWidth', 2.0);
+            edge = simple_spliced_info.edges(i, :);
+            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
         end
         highlighted_edges.simple_splice_edges = simple_spliced_info.edges;
     end
 end
 
+% ===================== 7. 添加标签和美化 =====================
 % 显示节点标签
 labelnode(p, 1:numnodes(G), 1:numnodes(G));
 
