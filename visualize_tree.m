@@ -65,28 +65,48 @@ end
 % ===================== 4. 高亮拼接骨干树 =====================
 % 使用从analyze_pruned_tree.m获取的spliced_depth_info信息
 if nargin > 2 && isstruct(spliced_depth_info)
+    % 首先高亮所有节点
     % 深度0（源节点）- 红色
     if isfield(spliced_depth_info, 'depth0_nodes') && ~isempty(spliced_depth_info.depth0_nodes)
         highlight(p, spliced_depth_info.depth0_nodes, 'NodeColor', 'r', 'MarkerSize', 12);
     end
     % 深度1 - 紫色
     if isfield(spliced_depth_info, 'depth1_nodes') && ~isempty(spliced_depth_info.depth1_nodes)
-        highlight(p, spliced_depth_info.depth1_nodes, 'NodeColor', [0.5 0 0.5]);
+        highlight(p, spliced_depth_info.depth1_nodes, 'NodeColor', [0.5 0 0.5], 'MarkerSize', 10);
     end
     % 深度2 - 绿色
     if isfield(spliced_depth_info, 'depth2_nodes') && ~isempty(spliced_depth_info.depth2_nodes)
-        highlight(p, spliced_depth_info.depth2_nodes, 'NodeColor', 'g');
+        highlight(p, spliced_depth_info.depth2_nodes, 'NodeColor', 'g', 'MarkerSize', 10);
     end
     % 深度3 - 蓝色
     if isfield(spliced_depth_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth3_nodes)
-        highlight(p, spliced_depth_info.depth3_nodes, 'NodeColor', 'b');
+        highlight(p, spliced_depth_info.depth3_nodes, 'NodeColor', 'b', 'MarkerSize', 10);
     end
     
-    % 高亮拼接骨干树边（红色）
+    % 然后高亮拼接骨干树边（红色）
     if isfield(spliced_depth_info, 'tree_edges') && ~isempty(spliced_depth_info.tree_edges)
-        for i = 1:size(spliced_depth_info.tree_edges, 1)
-            edge = spliced_depth_info.tree_edges(i, :);
-            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+        % 确保tree_edges是N×2的矩阵
+        if size(spliced_depth_info.tree_edges, 2) == 2
+            for i = 1:size(spliced_depth_info.tree_edges, 1)
+                edge = spliced_depth_info.tree_edges(i, :);
+                % 检查边是否存在于图中
+                if edge(1) <= numnodes(G) && edge(2) <= numnodes(G)
+                    highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+                    
+                    % 记录边信息
+                    if edge(1) < edge(2)  % 确保边的方向从小节点到大节点
+                        if ismember(edge(1), spliced_depth_info.depth0_nodes) && ismember(edge(2), spliced_depth_info.depth1_nodes)
+                            highlighted_edges.depth0_to_1 = [highlighted_edges.depth0_to_1; edge];
+                        elseif ismember(edge(1), spliced_depth_info.depth1_nodes) && ismember(edge(2), spliced_depth_info.depth2_nodes)
+                            highlighted_edges.depth1_to_2 = [highlighted_edges.depth1_to_2; edge];
+                        elseif ismember(edge(1), spliced_depth_info.depth2_nodes) && ismember(edge(2), spliced_depth_info.depth3_nodes)
+                            highlighted_edges.depth2_to_3 = [highlighted_edges.depth2_to_3; edge];
+                        end
+                    end
+                end
+            end
+        else
+            warning('spliced_depth_info.tree_edges格式不正确，应为N×2矩阵');
         end
     end
 end
@@ -94,24 +114,46 @@ end
 % ===================== 5. 高亮次级拼接 =====================
 % 使用从analyze_pruned_tree.m获取的secondary_spliced_info信息
 if nargin > 2 && isstruct(spliced_depth_info) && isfield(spliced_depth_info, 'depth2_spliced_info')
+    secondary_info = spliced_depth_info.depth2_spliced_info;
+    
+    % 首先高亮新增的节点
     % 高亮次级拼接的深度1节点（紫色）
-    if isfield(spliced_depth_info.depth2_spliced_info, 'nodes') && ~isempty(spliced_depth_info.depth2_spliced_info.nodes)
-        highlight(p, spliced_depth_info.depth2_spliced_info.nodes, 'NodeColor', [0.5 0 0.5]);
+    if isfield(secondary_info, 'nodes') && ~isempty(secondary_info.nodes)
+        new_nodes = setdiff(secondary_info.nodes, spliced_depth_info.depth1_nodes);
+        if ~isempty(new_nodes)
+            highlight(p, new_nodes, 'NodeColor', [0.5 0 0.5]);
+        end
     end
     % 高亮次级拼接的深度2节点（绿色）
-    if isfield(spliced_depth_info.depth2_spliced_info, 'depth2_nodes') && ~isempty(spliced_depth_info.depth2_spliced_info.depth2_nodes)
-        highlight(p, spliced_depth_info.depth2_spliced_info.depth2_nodes, 'NodeColor', 'g');
+    if isfield(secondary_info, 'depth2_nodes') && ~isempty(secondary_info.depth2_nodes)
+        new_nodes = setdiff(secondary_info.depth2_nodes, spliced_depth_info.depth2_nodes);
+        if ~isempty(new_nodes)
+            highlight(p, new_nodes, 'NodeColor', 'g');
+        end
     end
     % 高亮次级拼接的深度3节点（蓝色）
-    if isfield(spliced_depth_info.depth2_spliced_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth2_spliced_info.depth3_nodes)
-        highlight(p, spliced_depth_info.depth2_spliced_info.depth3_nodes, 'NodeColor', 'b');
+    if isfield(secondary_info, 'depth3_nodes') && ~isempty(secondary_info.depth3_nodes)
+        new_nodes = setdiff(secondary_info.depth3_nodes, spliced_depth_info.depth3_nodes);
+        if ~isempty(new_nodes)
+            highlight(p, new_nodes, 'NodeColor', 'b');
+        end
     end
     
-    % 高亮次级拼接边（红色）
-    if isfield(spliced_depth_info.depth2_spliced_info, 'edges') && ~isempty(spliced_depth_info.depth2_spliced_info.edges)
-        for i = 1:size(spliced_depth_info.depth2_spliced_info.edges, 1)
-            edge = spliced_depth_info.depth2_spliced_info.edges(i, :);
-            highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+    % 然后高亮次级拼接边（红色）
+    if isfield(secondary_info, 'edges') && ~isempty(secondary_info.edges)
+        % 确保edges是N×2的矩阵
+        if size(secondary_info.edges, 2) == 2
+            for i = 1:size(secondary_info.edges, 1)
+                edge = secondary_info.edges(i, :);
+                % 检查边是否存在于图中且不在拼接骨干树中
+                if edge(1) <= numnodes(G) && edge(2) <= numnodes(G)
+                    if ~ismember(edge, spliced_depth_info.tree_edges, 'rows')
+                        highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+                    end
+                end
+            end
+        else
+            warning('secondary_info.edges格式不正确，应为N×2矩阵');
         end
     end
 end

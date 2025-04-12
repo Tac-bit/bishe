@@ -94,6 +94,20 @@ end
 % 获取拼接骨干树中的所有节点
 spliced_tree_nodes = unique(cell2mat(spliced_paths));
 
+% 初始化拼接骨干树边
+spliced_depth_info.tree_edges = [];
+
+% 从spliced_pruned_mat中提取边
+[source_nodes, target_nodes] = find(spliced_pruned_mat > 0);
+for i = 1:length(source_nodes)
+    edge = [source_nodes(i), target_nodes(i)];
+    % 确保边的方向从小节点到大节点
+    if edge(1) > edge(2)
+        edge = [edge(2), edge(1)];
+    end
+    spliced_depth_info.tree_edges = [spliced_depth_info.tree_edges; edge];
+end
+
 % 使用BFS计算拼接骨干树节点深度
 spliced_node_depths = -ones(n, 1);  % 初始化所有节点深度为-1
 spliced_node_depths(source_node) = 0;  % 源节点深度为0
@@ -128,6 +142,12 @@ for depth = 0:max_spliced_depth
     spliced_depth_stats{depth + 1, 1} = nodes_at_depth;
     spliced_depth_stats{depth + 1, 2} = length(nodes_at_depth);
 end
+
+% 更新拼接深度信息结构体
+spliced_depth_info.depth0_nodes = spliced_depth_stats{1, 1};  % 深度0的节点（源节点）
+spliced_depth_info.depth1_nodes = spliced_depth_stats{2, 1};  % 深度1的节点
+spliced_depth_info.depth2_nodes = spliced_depth_stats{3, 1};  % 深度2的节点
+spliced_depth_info.depth3_nodes = spliced_depth_stats{4, 1};  % 深度3的节点
 
 % ===================== 5. 次级拼接（深度为1的骨干树节点拼接） =====================
 % 获取所有骨干树内的深度1节点
@@ -167,8 +187,8 @@ depth_info.depth2_nodes = depth_stats{3, 1};  % 深度2的节点
 depth_info.depth3_nodes = depth_stats{4, 1};  % 深度3的节点
 
 % 更新拼接深度信息结构体
-spliced_depth_info.depth0_nodes = depth_info.depth0_nodes;  % 深度0的节点（源节点）
-spliced_depth_info.depth1_nodes = depth_info.depth1_nodes;  % 深度1的节点
+% 注意：不要覆盖之前设置的拼接骨干树节点信息
+% spliced_depth_info.depth0_nodes 和 spliced_depth_info.depth1_nodes 已经在前面设置
 
 % 更新节点信息
 depth0_nodes = depth_info.depth0_nodes(:);  % 转换为列向量
