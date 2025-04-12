@@ -20,6 +20,14 @@ filtered_adj_mat_copy = filtered_adj_mat;
 % 获取骨干树中的所有节点
 tree_nodes = unique(cell2mat(pruned_paths));
 
+% 初始化拼接深度信息结构体
+spliced_depth_info = struct();
+spliced_depth_info.depth0_nodes = [];  % 深度0的节点（源节点）
+spliced_depth_info.depth1_nodes = [];  % 深度1的节点
+spliced_depth_info.depth2_nodes = [];  % 深度2的节点
+spliced_depth_info.depth3_nodes = [];  % 深度3的节点
+spliced_depth_info.tree_edges = [];    % 拼接边
+
 % ===================== 2. 计算骨干树节点深度 =====================
 % 使用BFS计算节点深度
 n = size(pruned_tree_mat, 1);
@@ -122,8 +130,29 @@ for depth = 0:max_spliced_depth
 end
 
 % ===================== 5. 次级拼接（深度为1的骨干树节点拼接） =====================
-% 预留次级拼接函数接口
-% secondary_spliced_info = secondary_splice(filtered_adj_mat_copy, tree_nodes, node_depths, n, spliced_tree_nodes);
+% 获取所有骨干树内的深度1节点
+depth1_nodes = find(node_depths == 1);
+depth1_nodes = intersect(depth1_nodes, tree_nodes);  % 确保是骨干树内的节点
+
+% 调用次级拼接函数
+secondary_spliced_info = secondary_splice(filtered_adj_mat_copy, tree_nodes, node_depths, n, spliced_tree_nodes);
+
+% 更新拼接骨干树信息
+if ~isempty(secondary_spliced_info.nodes)
+    % 将次级拼接得到的深度2节点添加到spliced_depth_info中
+    spliced_depth_info.depth2_nodes = unique([spliced_depth_info.depth2_nodes(:); secondary_spliced_info.depth2_nodes(:)]);
+    
+    % 将次级拼接得到的深度3节点添加到spliced_depth_info中
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        spliced_depth_info.depth3_nodes = unique([spliced_depth_info.depth3_nodes(:); tree_info.global_depth_info.depth3_nodes(:)]);
+    end
+    
+    % 更新拼接边信息
+    if ~isempty(secondary_spliced_info.edges)
+        spliced_depth_info.tree_edges = [spliced_depth_info.tree_edges; secondary_spliced_info.edges];
+    end
+end
 
 % ===================== 6. 简单拼接（深度为2的骨干树节点拼接） =====================
 % 执行简单拼接
@@ -132,18 +161,23 @@ simple_spliced_info = simple_splice(filtered_adj_mat_copy, tree_nodes, node_dept
 % ===================== 7. 数据汇总 =====================
 % 创建深度信息结构体
 depth_info = struct();
-depth_info.depth0_nodes = depth_stats{1, 1};  % 深度0的节点
+depth_info.depth0_nodes = depth_stats{1, 1};  % 深度0的节点（源节点）
 depth_info.depth1_nodes = depth_stats{2, 1};  % 深度1的节点
 depth_info.depth2_nodes = depth_stats{3, 1};  % 深度2的节点
 depth_info.depth3_nodes = depth_stats{4, 1};  % 深度3的节点
 
-% 创建拼接骨干树深度信息结构体
-spliced_depth_info = struct();
-spliced_depth_info.depth0_nodes = spliced_depth_stats{1, 1};  % 深度0的节点
-spliced_depth_info.depth1_nodes = spliced_depth_stats{2, 1};  % 深度1的节点
-spliced_depth_info.depth2_nodes = spliced_depth_stats{3, 1};  % 深度2的节点
-spliced_depth_info.depth3_nodes = spliced_depth_stats{4, 1};  % 深度3的节点
-spliced_depth_info.tree_edges = spliced_tree_edges;  % 存储拼接骨干树的边信息
+% 更新拼接深度信息结构体
+spliced_depth_info.depth0_nodes = depth_info.depth0_nodes;  % 深度0的节点（源节点）
+spliced_depth_info.depth1_nodes = depth_info.depth1_nodes;  % 深度1的节点
+
+% 更新节点信息
+depth0_nodes = depth_info.depth0_nodes(:);  % 转换为列向量
+depth1_nodes = depth_info.depth1_nodes(:);  % 转换为列向量
+depth2_nodes = depth_info.depth2_nodes(:);  % 转换为列向量
+depth3_nodes = depth_info.depth3_nodes(:);  % 转换为列向量
+
+% 确保所有数组都是列向量后再合并
+tree_nodes = unique([depth0_nodes; depth1_nodes; depth2_nodes; depth3_nodes]);
 
 % 将简单拼接的信息添加到spliced_depth_info中
 spliced_depth_info.depth2_spliced_info = simple_spliced_info.depth2_spliced_info;
@@ -158,7 +192,7 @@ all_depth3_nodes = unique([depth_info.depth3_nodes(:); simple_spliced_info.all_s
 depth_info.depth3_nodes = sort(all_depth3_nodes);
 
 % 更新spliced_depth_info中的深度3节点集合
-all_spliced_depth3_nodes = unique([spliced_depth_info.depth3_nodes(:); spliced_depth_info.all_spliced_nodes(:)]);
+                            all_spliced_depth3_nodes = unique([spliced_depth_info.depth3_nodes(:); spliced_depth_info.all_spliced_nodes(:)]);
 spliced_depth_info.depth3_nodes = sort(all_spliced_depth3_nodes);
 
 % ===================== 8. 控制台打印 =====================
@@ -200,9 +234,24 @@ for depth = 0:size(spliced_depth_stats, 1)-1
     end
 end
 
-% 3. 次级拼接信息（预留）
+% 3. 次级拼接信息
 fprintf('\n===================== 次级拼接信息 =====================\n');
-fprintf('（待实现）\n');
+if ~isempty(secondary_spliced_info.nodes)
+    fprintf('参与次级拼接的深度1节点：\n');
+    fprintf('%d ', sort(secondary_spliced_info.nodes));
+    fprintf('（共%d个节点）\n', length(secondary_spliced_info.nodes));
+    
+    % 打印每个深度1节点构建的平衡二叉树信息
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        fprintf('\n深度1节点 %d 构建的平衡二叉树:\n', tree_info.source_node);
+        fprintf('深度1节点: %s\n', mat2str(tree_info.global_depth_info.depth1_nodes));
+        fprintf('深度2节点: %s\n', mat2str(tree_info.global_depth_info.depth2_nodes));
+        fprintf('深度3节点: %s\n', mat2str(tree_info.global_depth_info.depth3_nodes));
+    end
+else
+    fprintf('没有可进行次级拼接的深度1节点\n');
+end
 
 % 4. 简单拼接信息
 fprintf('\n===================== 简单拼接信息 =====================\n');

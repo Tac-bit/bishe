@@ -110,6 +110,8 @@ for i = 1:length(depth1_nodes)
     secondary_spliced_info.nodes = [secondary_spliced_info.nodes; source_node];
     
     % 获取所有边
+    edges = [];
+    weights = [];
     for j = 1:length(pruned_paths)
         path = pruned_paths{j};
         for k = 1:length(path)-1
@@ -117,11 +119,26 @@ for i = 1:length(depth1_nodes)
             weight = filtered_adj_mat_copy(edge(1), edge(2));
             
             % 检查边是否已存在
-            if ~ismember(edge, secondary_spliced_info.edges, 'rows')
-                secondary_spliced_info.edges = [secondary_spliced_info.edges; edge];
-                secondary_spliced_info.weights = [secondary_spliced_info.weights; weight];
+            if isempty(edges) || ~any(all(edges == edge, 2))
+                edges = [edges; edge];
+                weights = [weights; weight];
             end
         end
+    end
+    
+    % 存储边和权重
+    if ~isempty(edges)
+        % 确保edges是两列矩阵
+        edges = reshape(edges, [], 2);
+        weights = reshape(weights, [], 1);
+        
+        % 直接添加边和权重
+        secondary_spliced_info.edges = [secondary_spliced_info.edges; edges];
+        secondary_spliced_info.weights = [secondary_spliced_info.weights; weights];
+        
+        % 去除重复的边
+        [secondary_spliced_info.edges, unique_idx] = unique(secondary_spliced_info.edges, 'rows');
+        secondary_spliced_info.weights = secondary_spliced_info.weights(unique_idx);
     end
     
     % 更新深度2节点（使用综合深度）
