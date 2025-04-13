@@ -4,7 +4,7 @@ clear all;
 close all;
 
 % 设置随机种子，确保结果可复现
-rng(28);  % 使用固定随机种子
+rng(29);  % 使用固定随机种子
 
 % 参数设置
 threshold = 40; % 带宽阈值，低于此值的边将被过滤
@@ -49,3 +49,4 @@ visualize_tree(filtered_adj_mat_copy, depth_info, spliced_depth_info, simple_spl
 
 % 综合可视化所有树结构
 visualize_all_trees(filtered_adj_mat, depth_info, spliced_depth_info, simple_spliced_info, pruned_tree_mat);
+

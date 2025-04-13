@@ -94,6 +94,65 @@ if isstruct(spliced_depth_info)
             highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
         end
     end
+    
+    % ===================== 4.5 处理竞争节点 =====================
+    % 如果存在竞争信息，处理竞争节点和相关边
+    if isfield(spliced_depth_info, 'competition_info')
+        competition_info = spliced_depth_info.competition_info;
+        
+        % 处理竞争节点（保留原来深度的颜色）
+        if isfield(competition_info, 'nodes') && ~isempty(competition_info.nodes)
+            % 只添加特殊边框和大小，不改变节点颜色
+            highlight(p, competition_info.nodes, 'Marker', 'o', 'LineWidth', 2);
+            
+            % 在竞争节点上添加特殊标签
+            for i = 1:length(competition_info.nodes)
+                node = competition_info.nodes(i);
+                % 获取节点位置 - 使用适合cell数组的比较方法
+                node_str = num2str(node);
+                node_idx = [];
+                for j = 1:length(p.NodeLabel)
+                    if strcmp(p.NodeLabel{j}, node_str)
+                        node_idx = j;
+                        break;
+                    end
+                end
+                
+                if ~isempty(node_idx)
+                    x = p.XData(node_idx);
+                    y = p.YData(node_idx);
+                    % 添加星号标记
+                    text(x, y+0.2, '*', 'FontSize', 14, 'Color', 'r', 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
+                end
+            end
+        end
+        
+        % 显示被舍弃的拼接骨干树边（灰色实线）
+        if isfield(competition_info, 'backbone_edges') && ~isempty(competition_info.backbone_edges)
+            for i = 1:size(competition_info.backbone_edges, 1)
+                edge = competition_info.backbone_edges(i, :);
+                if edge(1) <= numnodes(G) && edge(2) <= numnodes(G)
+                    % 检查边是否存在于图中
+                    if findedge(G, edge(1), edge(2)) > 0
+                        highlight(p, edge, 'EdgeColor', [0.7 0.7 0.7], 'LineWidth', 2, 'LineStyle', '-');
+                    end
+                end
+            end
+        end
+        
+        % 高亮被保留的次级拼接边（红色实线）
+        if isfield(competition_info, 'secondary_edges') && ~isempty(competition_info.secondary_edges)
+            for i = 1:size(competition_info.secondary_edges, 1)
+                edge = competition_info.secondary_edges(i, :);
+                if edge(1) <= numnodes(G) && edge(2) <= numnodes(G)
+                    % 检查边是否存在于图中
+                    if findedge(G, edge(1), edge(2)) > 0
+                        highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
+                    end
+                end
+            end
+        end
+    end
 end
 
 % ===================== 5. 高亮次级拼接 =====================
@@ -140,6 +199,31 @@ if isstruct(simple_spliced_info)
     end
 end
 
+% ===================== 6.5 高亮拼接骨干树上的简单拼接 =====================
+% 处理拼接骨干树上的简单拼接信息
+if isstruct(spliced_depth_info) && isfield(spliced_depth_info, 'simple_splice_info')
+    spliced_simple_info = spliced_depth_info.simple_splice_info;
+    
+    % 高亮拼接骨干树上简单拼接的深度2节点（绿色更深）
+    if isfield(spliced_simple_info, 'nodes') && ~isempty(spliced_simple_info.nodes)
+        % 这些节点已经在上面高亮为绿色，这里可以再次高亮，使颜色更深
+        highlight(p, spliced_simple_info.nodes, 'NodeColor', [0 0.7 0]);
+    end
+    
+    % 高亮拼接骨干树上简单拼接的深度3节点（蓝色）
+    if isfield(spliced_simple_info, 'depth3_nodes') && ~isempty(spliced_simple_info.depth3_nodes)
+        highlight(p, spliced_simple_info.depth3_nodes, 'NodeColor', 'b');
+    end
+    
+    % 高亮拼接骨干树上简单拼接边（橙红色，以区别于其他拼接边）
+    if isfield(spliced_simple_info, 'edges') && ~isempty(spliced_simple_info.edges)
+        for i = 1:size(spliced_simple_info.edges, 1)
+            edge = spliced_simple_info.edges(i, :);
+            highlight(p, edge, 'EdgeColor', [1 0.5 0], 'LineWidth', 3, 'LineStyle', '-');
+        end
+    end
+end
+
 % ===================== 7. 添加标签和图例 =====================
 % 显示节点标签
 labelnode(p, 1:numnodes(G), 1:numnodes(G));
@@ -154,6 +238,7 @@ hold on;
 % 创建图例项
 plot(NaN, NaN, '-', 'Color', [0.6 0.8 1.0], 'LineWidth', 2, 'DisplayName', '骨干树边');
 plot(NaN, NaN, '-', 'Color', 'r', 'LineWidth', 2, 'DisplayName', '拼接边');
+plot(NaN, NaN, '-', 'Color', [1 0.5 0], 'LineWidth', 2, 'DisplayName', '拼接骨干树上的简单拼接边');
 plot(NaN, NaN, 'o', 'Color', 'r', 'MarkerFaceColor', 'r', 'MarkerSize', 12, 'DisplayName', '源节点(大)');
 plot(NaN, NaN, 'o', 'Color', [0.5 0 0.5], 'MarkerFaceColor', [0.5 0 0.5], 'MarkerSize', 8, 'DisplayName', '深度1节点');
 plot(NaN, NaN, 'o', 'Color', 'g', 'MarkerFaceColor', 'g', 'MarkerSize', 8, 'DisplayName', '深度2节点');

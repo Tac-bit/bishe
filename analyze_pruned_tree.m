@@ -167,6 +167,14 @@ for depth = 0:max_spliced_depth
     end
 end
 
+% --------------------- 4.1 拼接骨干树上的简单拼接 ---------------------
+% 进行拼接骨干树上的简单拼接 - 类似深度2节点的简单拼接
+fprintf('\n--------------------- 拼接骨干树上的简单拼接 ---------------------\n');
+spliced_backbone_simple_splice = spliced_simple_splice(filtered_adj_mat_copy, spliced_tree_nodes, spliced_node_depths, n);
+
+% 将拼接骨干树上的简单拼接信息添加到spliced_depth_info
+spliced_depth_info.simple_splice_info = spliced_backbone_simple_splice;
+
 % ===================== 5. 次级拼接（深度为1的骨干树节点拼接） =====================
 % 获取所有骨干树内的深度1节点
 depth1_nodes = find(node_depths == 1);
@@ -190,6 +198,114 @@ if ~isempty(secondary_spliced_info.nodes)
     if ~isempty(secondary_spliced_info.edges)
         spliced_depth_info.tree_edges = [spliced_depth_info.tree_edges; secondary_spliced_info.edges];
     end
+end
+
+% ===================== 5.5 检测并处理节点竞争 =====================
+% 存储竞争节点信息的结构体
+competition_info = struct();
+competition_info.nodes = [];           % 存储发生竞争的节点
+competition_info.backbone_edges = [];  % 骨干树竞争边
+competition_info.secondary_edges = []; % 次级拼接竞争边
+
+% 提取所有拼接骨干树中的深度3节点
+backbone_depth3_nodes = [];
+if isfield(spliced_depth_info, 'depth3_nodes') && ~isempty(spliced_depth_info.depth3_nodes)
+    backbone_depth3_nodes = spliced_depth_info.depth3_nodes(:);
+end
+
+% 提取所有次级拼接中的深度3节点
+secondary_depth3_nodes = [];
+if ~isempty(secondary_spliced_info.trees)
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        if isfield(tree_info.global_depth_info, 'depth3_nodes') && ~isempty(tree_info.global_depth_info.depth3_nodes)
+            secondary_depth3_nodes = unique([secondary_depth3_nodes(:); tree_info.global_depth_info.depth3_nodes(:)]);
+        end
+    end
+end
+
+% 检测竞争节点 - 同时被骨干树和次级拼接的深度3节点
+competition_nodes = intersect(backbone_depth3_nodes, secondary_depth3_nodes);
+competition_info.nodes = competition_nodes;
+
+% 如果存在竞争节点，处理竞争
+if ~isempty(competition_nodes)
+    fprintf('\n===================== 节点竞争检测 =====================\n');
+    fprintf('检测到以下节点同时被拼接骨干树和次级拼接所拼接（深度为3）:\n');
+    fprintf('%d ', competition_nodes);
+    fprintf('\n共%d个竞争节点\n', length(competition_nodes));
+    
+    % 找出所有与竞争节点相连的拼接骨干树边
+    backbone_edges_to_remove = [];
+    for i = 1:size(spliced_depth_info.tree_edges, 1)
+        edge = spliced_depth_info.tree_edges(i, :);
+        if any(ismember(edge, competition_nodes))
+            backbone_edges_to_remove = [backbone_edges_to_remove; i];
+            competition_info.backbone_edges = [competition_info.backbone_edges; edge];
+        end
+    end
+    
+    % 从拼接骨干树中移除这些边
+    if ~isempty(backbone_edges_to_remove)
+        spliced_depth_info.tree_edges(backbone_edges_to_remove, :) = [];
+    end
+    
+    % 更新拼接骨干树的深度3节点集合，移除竞争节点
+    spliced_depth_info.depth3_nodes = setdiff(spliced_depth_info.depth3_nodes, competition_nodes);
+    
+    % 存储所有与竞争节点相连的次级拼接边（这些边将保留）
+    for i = 1:size(secondary_spliced_info.edges, 1)
+        edge = secondary_spliced_info.edges(i, :);
+        if any(ismember(edge, competition_nodes))
+            competition_info.secondary_edges = [competition_info.secondary_edges; edge];
+        end
+    end
+    
+    % 确保竞争节点所有相关数据结构都得到更新
+    % 1. 更新次级拼接树中的节点信息
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        % 查找并更新每个次级拼接树中的深度3节点
+        if isfield(tree_info.global_depth_info, 'depth3_nodes')
+            % 检查该树是否包含竞争节点
+            common_nodes = intersect(tree_info.global_depth_info.depth3_nodes, competition_nodes);
+            if ~isempty(common_nodes)
+                % 确保竞争节点保留在该树中
+                tree_info.global_depth_info.depth3_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
+                secondary_spliced_info.trees{i} = tree_info;
+                
+                % 确保竞争节点的所有相关边都正确更新
+                % 在次级拼接树中找到与竞争节点相连的所有节点和边
+                local_tree_mat = tree_info.tree_mat;
+                for node = common_nodes'
+                    connected_nodes = find(local_tree_mat(node, :) > 0 | local_tree_mat(:, node)' > 0);
+                    for conn_node = connected_nodes
+                        if conn_node ~= node
+                            edge = sort([node, conn_node]); % 排序确保边的一致性
+                            % 确保这条边被标记为次级拼接边
+                            if ~ismember(edge, competition_info.secondary_edges, 'rows')
+                                competition_info.secondary_edges = [competition_info.secondary_edges; edge];
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    % 2. 整合竞争节点的深度信息
+    % 确保竞争节点在最终的深度结构中正确归类为深度3节点，并且属于次级拼接树
+    secondary_depth3_nodes = [];
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        if isfield(tree_info.global_depth_info, 'depth3_nodes')
+            secondary_depth3_nodes = unique([secondary_depth3_nodes; tree_info.global_depth_info.depth3_nodes(:)]);
+        end
+    end           
+    fprintf('\n处理节点竞争：将竞争节点的拼接权让渡给次级拼接\n');
+    fprintf('保留了%d条次级拼接的边\n', size(competition_info.secondary_edges, 1));
+    % 添加竞争信息到spliced_depth_info结构体
+    spliced_depth_info.competition_info = competition_info;
 end
 
 % ===================== 6. 简单拼接（深度为2的骨干树节点拼接） =====================
@@ -227,10 +343,53 @@ spliced_depth_info.all_spliced_nodes = unique([depth3_nodes; spliced_nodes]);
 
 % 更新depth_info中的深度3节点集合，添加所有拼接得到的节点
 all_depth3_nodes = unique([depth_info.depth3_nodes(:); simple_spliced_info.all_spliced_nodes(:)]);
+
+% 如果有竞争节点，确保它们被包含在depth_info和spliced_depth_info中的正确位置
+if isfield(spliced_depth_info, 'competition_info') && ~isempty(spliced_depth_info.competition_info.nodes)
+    competition_nodes = spliced_depth_info.competition_info.nodes;
+    
+    % 确保竞争节点在depth_info的深度3节点中
+    all_depth3_nodes = unique([all_depth3_nodes; competition_nodes(:)]);
+    
+    % 确保竞争节点被正确分类（从骨干树移除，保留在次级拼接中）
+    spliced_depth_info.depth3_nodes = setdiff(spliced_depth_info.depth3_nodes, competition_nodes);
+    
+    % 更新次级拼接信息，确保竞争节点保留在次级拼接中并且所有引用都一致
+    if ~isempty(secondary_spliced_info.trees)
+        secondary_depth3_nodes = [];
+        for i = 1:length(secondary_spliced_info.trees)
+            tree_info = secondary_spliced_info.trees{i};
+            % 检查该树是否包含竞争节点
+            common_nodes = intersect(tree_info.global_depth_info.depth3_nodes, competition_nodes);
+            if ~isempty(common_nodes)
+                % 确保竞争节点保留在该树中
+                tree_info.global_depth_info.depth3_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
+                secondary_spliced_info.trees{i} = tree_info;
+                
+                % 更新次级拼接树的全局深度信息
+                if ~isfield(secondary_spliced_info, 'depth3_nodes')
+                    secondary_spliced_info.depth3_nodes = [];
+                end
+                secondary_spliced_info.depth3_nodes = unique([secondary_spliced_info.depth3_nodes; common_nodes]);
+            end
+            secondary_depth3_nodes = unique([secondary_depth3_nodes; tree_info.global_depth_info.depth3_nodes(:)]);
+        end
+    end
+    
+    % 更新simple_spliced_info中的深度3节点
+    % 确保竞争节点不在简单拼接中，如果它们已归属于次级拼接
+    if isfield(simple_spliced_info, 'depth3_nodes')
+        simple_spliced_info.depth3_nodes = setdiff(simple_spliced_info.depth3_nodes, competition_nodes);
+    end
+    if isfield(simple_spliced_info, 'all_spliced_nodes')
+        simple_spliced_info.all_spliced_nodes = setdiff(simple_spliced_info.all_spliced_nodes, competition_nodes);
+    end
+end
+
 depth_info.depth3_nodes = sort(all_depth3_nodes);
 
 % 更新spliced_depth_info中的深度3节点集合
-                            all_spliced_depth3_nodes = unique([spliced_depth_info.depth3_nodes(:); spliced_depth_info.all_spliced_nodes(:)]);
+all_spliced_depth3_nodes = unique([spliced_depth_info.depth3_nodes(:); spliced_depth_info.all_spliced_nodes(:)]);
 spliced_depth_info.depth3_nodes = sort(all_spliced_depth3_nodes);
 
 % ===================== 8. 控制台打印 =====================
