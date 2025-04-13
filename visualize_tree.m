@@ -147,7 +147,18 @@ if nargin > 2 && isstruct(spliced_depth_info) && isfield(spliced_depth_info, 'de
                 edge = secondary_info.edges(i, :);
                 % 检查边是否存在于图中且不在拼接骨干树中
                 if edge(1) <= numnodes(G) && edge(2) <= numnodes(G)
-                    if ~ismember(edge, spliced_depth_info.tree_edges, 'rows')
+                    % 检查边是否已经在拼接骨干树中
+                    is_duplicate = false;
+                    if ~isempty(spliced_depth_info.tree_edges)
+                        for j = 1:size(spliced_depth_info.tree_edges, 1)
+                            if (edge(1) == spliced_depth_info.tree_edges(j,1) && edge(2) == spliced_depth_info.tree_edges(j,2)) || ...
+                               (edge(1) == spliced_depth_info.tree_edges(j,2) && edge(2) == spliced_depth_info.tree_edges(j,1))
+                                is_duplicate = true;
+                                break;
+                            end
+                        end
+                    end
+                    if ~is_duplicate
                         highlight(p, edge, 'EdgeColor', 'r', 'LineWidth', 3, 'LineStyle', '-');
                     end
                 end

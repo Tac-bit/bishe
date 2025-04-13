@@ -144,10 +144,28 @@ for depth = 0:max_spliced_depth
 end
 
 % 更新拼接深度信息结构体
-spliced_depth_info.depth0_nodes = spliced_depth_stats{1, 1};  % 深度0的节点（源节点）
-spliced_depth_info.depth1_nodes = spliced_depth_stats{2, 1};  % 深度1的节点
-spliced_depth_info.depth2_nodes = spliced_depth_stats{3, 1};  % 深度2的节点
-spliced_depth_info.depth3_nodes = spliced_depth_stats{4, 1};  % 深度3的节点
+% 初始化所有深度节点为空数组
+spliced_depth_info.depth0_nodes = [];
+spliced_depth_info.depth1_nodes = [];
+spliced_depth_info.depth2_nodes = [];
+spliced_depth_info.depth3_nodes = [];
+
+% 根据实际深度更新节点信息
+for depth = 0:max_spliced_depth
+    if depth + 1 <= size(spliced_depth_stats, 1)
+        nodes_at_depth = spliced_depth_stats{depth + 1, 1};
+        switch depth
+            case 0
+                spliced_depth_info.depth0_nodes = nodes_at_depth;
+            case 1
+                spliced_depth_info.depth1_nodes = nodes_at_depth;
+            case 2
+                spliced_depth_info.depth2_nodes = nodes_at_depth;
+            case 3
+                spliced_depth_info.depth3_nodes = nodes_at_depth;
+        end
+    end
+end
 
 % ===================== 5. 次级拼接（深度为1的骨干树节点拼接） =====================
 % 获取所有骨干树内的深度1节点
