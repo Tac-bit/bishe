@@ -253,6 +253,22 @@ if ~isempty(competition_nodes)
     % 更新拼接骨干树的深度3节点集合，移除竞争节点
     spliced_depth_info.depth3_nodes = setdiff(spliced_depth_info.depth3_nodes, competition_nodes);
     
+    % 从拼接骨干树的节点集合中移除竞争节点
+    spliced_tree_nodes = setdiff(spliced_tree_nodes, competition_nodes);
+    
+    % 更新拼接骨干树的节点统计信息
+    for depth = 0:max_spliced_depth
+        if depth + 1 <= size(spliced_depth_stats, 1)
+            % 移除竞争节点
+            nodes_at_depth = spliced_depth_stats{depth + 1, 1};
+            if depth == 3  % 深度3的节点需要特殊处理
+                nodes_at_depth = setdiff(nodes_at_depth, competition_nodes);
+                spliced_depth_stats{depth + 1, 1} = nodes_at_depth;
+                spliced_depth_stats{depth + 1, 2} = length(nodes_at_depth);
+            end
+        end
+    end
+    
     % 存储所有与竞争节点相连的次级拼接边（这些边将保留）
     for i = 1:size(secondary_spliced_info.edges, 1)
         edge = secondary_spliced_info.edges(i, :);
@@ -483,6 +499,148 @@ if ~isempty(simple_spliced_info.edges)
 else
     fprintf('无拼接路径\n');
 end
+
+% 5. 数值量化部分 - 汇总率统计
+fprintf('\n===================== 汇聚率统计 =====================\n');
+
+% 计算已汇总的所有节点（骨干树、拼接部分的所有节点求并集）
+summarized_nodes = tree_nodes(:); % 确保是列向量
+
+% 添加拼接骨干树节点
+summarized_nodes = unique([summarized_nodes; spliced_tree_nodes(:)]);
+
+% 添加次级拼接的节点
+if ~isempty(secondary_spliced_info.nodes)
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        if isfield(tree_info.global_depth_info, 'depth1_nodes')
+            summarized_nodes = unique([summarized_nodes; tree_info.global_depth_info.depth1_nodes(:)]);
+        end
+        if isfield(tree_info.global_depth_info, 'depth2_nodes')
+            summarized_nodes = unique([summarized_nodes; tree_info.global_depth_info.depth2_nodes(:)]);
+        end
+        if isfield(tree_info.global_depth_info, 'depth3_nodes')
+            summarized_nodes = unique([summarized_nodes; tree_info.global_depth_info.depth3_nodes(:)]);
+        end
+    end
+end
+
+% 添加简单拼接得到的节点
+if isfield(simple_spliced_info, 'all_spliced_nodes') && ~isempty(simple_spliced_info.all_spliced_nodes)
+    summarized_nodes = unique([summarized_nodes; simple_spliced_info.all_spliced_nodes(:)]);
+end
+
+% 添加拼接骨干树上的简单拼接得到的节点
+if isfield(spliced_depth_info, 'simple_splice_info') 
+    % 检查深度2拼接节点
+    if isfield(spliced_depth_info.simple_splice_info, 'depth2_spliced_info') && isfield(spliced_depth_info.simple_splice_info.depth2_spliced_info, 'spliced_nodes')
+        summarized_nodes = unique([summarized_nodes; spliced_depth_info.simple_splice_info.depth2_spliced_info.spliced_nodes(:)]);
+    end
+    
+    % 检查拼接源节点
+    if isfield(spliced_depth_info.simple_splice_info, 'nodes')
+        summarized_nodes = unique([summarized_nodes; spliced_depth_info.simple_splice_info.nodes(:)]);
+    end
+    
+    % 检查all_spliced_nodes字段
+    if isfield(spliced_depth_info.simple_splice_info, 'all_spliced_nodes')
+        summarized_nodes = unique([summarized_nodes; spliced_depth_info.simple_splice_info.all_spliced_nodes(:)]);
+    end
+end
+
+% 确保添加spliced_depth_info中的all_spliced_nodes节点
+if isfield(spliced_depth_info, 'all_spliced_nodes') && ~isempty(spliced_depth_info.all_spliced_nodes)
+    summarized_nodes = unique([summarized_nodes; spliced_depth_info.all_spliced_nodes(:)]);
+end
+
+% 尝试添加额外的spliced_depth_info子结构中的节点
+if isfield(spliced_depth_info, 'depth2_spliced_info') && isfield(spliced_depth_info.depth2_spliced_info, 'spliced_nodes')
+    summarized_nodes = unique([summarized_nodes; spliced_depth_info.depth2_spliced_info.spliced_nodes(:)]);
+end
+
+% 排序获得的节点集合
+summarized_nodes = sort(summarized_nodes);
+
+% 计算潜在可汇聚的节点（初始过滤后的拓扑上与源节点连通的节点）
+potential_nodes = [];
+filtered_adj_mat_graph = graph(filtered_adj_mat ~= 0);
+
+% 使用连通分量查找与源节点连通的所有节点
+comp = conncomp(filtered_adj_mat_graph);
+source_comp = comp(source_node);
+potential_nodes = find(comp == source_comp)';
+
+% 排序获得的节点集合
+potential_nodes = sort(potential_nodes(:)); % 确保是列向量
+
+% 计算汇聚率
+convergence_rate = length(summarized_nodes) / length(potential_nodes) * 100;
+
+% 打印统计信息
+fprintf('潜在汇聚节点集合：\n');
+fprintf('%d ', potential_nodes);
+fprintf('\n潜在汇聚节点数量：%d\n', length(potential_nodes));
+
+fprintf('\n已汇总节点集合：\n');
+fprintf('%d ', summarized_nodes);
+fprintf('\n已汇总节点数量：%d\n', length(summarized_nodes));
+
+% 打印各部分贡献的节点数量
+fprintf('\n各部分贡献的节点数量：\n');
+fprintf('骨干树节点数量：%d\n', length(tree_nodes));
+fprintf('拼接骨干树节点数量：%d\n', length(spliced_tree_nodes));
+
+% 次级拼接节点数量
+secondary_nodes_count = 0;
+if ~isempty(secondary_spliced_info.nodes)
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        if isfield(tree_info.global_depth_info, 'depth1_nodes')
+            secondary_nodes_count = secondary_nodes_count + length(tree_info.global_depth_info.depth1_nodes);
+        end
+        if isfield(tree_info.global_depth_info, 'depth2_nodes')
+            secondary_nodes_count = secondary_nodes_count + length(tree_info.global_depth_info.depth2_nodes);
+        end
+        if isfield(tree_info.global_depth_info, 'depth3_nodes')
+            secondary_nodes_count = secondary_nodes_count + length(tree_info.global_depth_info.depth3_nodes);
+        end
+    end
+end
+fprintf('次级拼接节点数量：%d\n', secondary_nodes_count);
+
+% 简单拼接节点数量
+simple_splice_count = 0;
+if isfield(simple_spliced_info, 'all_spliced_nodes') && ~isempty(simple_spliced_info.all_spliced_nodes)
+    simple_splice_count = length(simple_spliced_info.all_spliced_nodes);
+end
+fprintf('简单拼接节点数量：%d\n', simple_splice_count);
+
+% 拼接骨干树上的简单拼接节点数量
+spliced_simple_count = 0;
+if isfield(spliced_depth_info, 'simple_splice_info') 
+    % 检查深度2拼接节点
+    if isfield(spliced_depth_info.simple_splice_info, 'depth2_spliced_info') && isfield(spliced_depth_info.simple_splice_info.depth2_spliced_info, 'spliced_nodes')
+        spliced_simple_count = spliced_simple_count + length(spliced_depth_info.simple_splice_info.depth2_spliced_info.spliced_nodes);
+    end
+    
+    % 检查拼接源节点
+    if isfield(spliced_depth_info.simple_splice_info, 'nodes')
+        spliced_simple_count = spliced_simple_count + length(spliced_depth_info.simple_splice_info.nodes);
+    end
+    
+    % 检查all_spliced_nodes字段
+    if isfield(spliced_depth_info.simple_splice_info, 'all_spliced_nodes')
+        spliced_simple_count = spliced_simple_count + length(spliced_depth_info.simple_splice_info.all_spliced_nodes);
+    end
+end
+fprintf('拼接骨干树上的简单拼接节点数量：%d\n', spliced_simple_count);
+
+% 打印拼接深度信息中的节点统计
+if isfield(spliced_depth_info, 'all_spliced_nodes') 
+    fprintf('拼接深度信息中的all_spliced_nodes节点数量：%d\n', length(spliced_depth_info.all_spliced_nodes));
+end
+
+fprintf('\n汇聚率：%.2f%% (%d/%d)\n', convergence_rate, length(summarized_nodes), length(potential_nodes));
 
 fprintf('\n===================== 信息打印完成 =====================\n');
 end 
