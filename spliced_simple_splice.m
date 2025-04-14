@@ -106,38 +106,21 @@ for i = 1:size(depth2_nodes, 1)
 end
 
 % 将拼接边信息存储到结构体中
-spliced_info = struct('nodes', depth2_nodes(:, 1), ...
-                     'edges', [source_points', target_points'], ...
-                     'weights', edge_weights', ...
-                     'depth3_nodes', sort(spliced_depth3_nodes(:)), ...  % 对拼接深度3节点进行升序排序
-                     'all_spliced_nodes', sort(spliced_depth3_nodes(:)));  % 所有拼接得到的节点
-
-% 打印拼接骨干树上简单拼接信息
-fprintf('拼接骨干树上的深度2节点集合（可进行拼接的节点）：\n');
 if ~isempty(depth2_nodes)
-    fprintf('%d ', sort(depth2_nodes(:,1)));
-    fprintf('（共%d个节点）\n', size(depth2_nodes, 1));
+    spliced_info = struct('nodes', depth2_nodes(:, 1), ...
+                         'edges', [source_points', target_points'], ...
+                         'weights', edge_weights', ...
+                         'depth3_nodes', sort(spliced_depth3_nodes(:)), ...  % 对拼接深度3节点进行升序排序
+                         'all_spliced_nodes', sort(spliced_depth3_nodes(:)));  % 所有拼接得到的节点
 else
-    fprintf('无（共0个节点）\n');
+    % 如果depth2_nodes为空，创建空的结构体
+    spliced_info = struct('nodes', [], ...
+                         'edges', [], ...
+                         'weights', [], ...
+                         'depth3_nodes', [], ...
+                         'all_spliced_nodes', []);
 end
 
-fprintf('\n拼接骨干树-简单拼接得到的深度3节点：\n');
-if ~isempty(spliced_depth3_nodes)
-    fprintf('%d ', sort(spliced_depth3_nodes));
-    fprintf('（共%d个节点）\n', length(spliced_depth3_nodes));
-else
-    fprintf('无（共0个节点）\n');
-end
-
-fprintf('\n拼接骨干树-简单拼接路径（深度2节点 -> 深度3节点）：\n');
-if ~isempty(source_points)
-    for i = 1:length(source_points)
-        fprintf('拼接骨干树-深度2节点 %d -> 深度3节点 %d (权重: %.2f)\n', ...
-            source_points(i), ...
-            target_points(i), ...
-            edge_weights(i));
-    end
-else
-    fprintf('无拼接路径\n');
-end
+% 创建深度2拼接信息子结构体
+spliced_info.depth2_spliced_info = struct('spliced_nodes', spliced_depth3_nodes(:));
 end 
