@@ -86,6 +86,58 @@ for i = 1:n
     end
 end
 
+% ===================== 3.5 检测与源节点连通的骨干树节点 =====================
+% 构建图并查找与源节点连通的所有节点
+filtered_graph = graph(filtered_adj_mat_copy);
+connected_nodes = [];
+
+% 使用BFS找出与源节点连通的所有节点
+visited = false(n, 1);
+queue = source_node;
+visited(source_node) = true;
+connected_nodes = [connected_nodes; source_node];
+
+while ~isempty(queue)
+    current = queue(1);
+    queue(1) = [];
+    
+    neighbors = find(filtered_adj_mat_copy(current, :) > 0);
+    for neighbor = neighbors
+        if ~visited(neighbor)
+            visited(neighbor) = true;
+            connected_nodes = [connected_nodes; neighbor];
+            queue = [queue, neighbor];
+        end
+    end
+end
+
+% 找出连通节点中的骨干树节点
+connected_backbone_nodes = intersect(connected_nodes, tree_nodes);
+connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+
+% 排除源节点
+connected_backbone_nodes = setdiff(connected_backbone_nodes, source_node);
+connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+
+% 初始化断开的边数量计数器
+total_edges_removed = 0;
+
+if ~isempty(connected_backbone_nodes)
+    for node = connected_backbone_nodes'
+        % 找到与该节点相连的所有边
+        connected_edges = find(filtered_adj_mat_copy(node, :) > 0);
+        
+        if ~isempty(connected_edges)
+            % 断开所有连接
+            for conn_node = connected_edges
+                filtered_adj_mat_copy(node, conn_node) = 0;
+                filtered_adj_mat_copy(conn_node, node) = 0;
+                total_edges_removed = total_edges_removed + 1;
+            end
+        end
+    end
+end
+
 % ===================== 4. 拼接骨干树（深度为0的骨干树节点拼接） =====================
 % 在特殊过滤拓扑上构建拼接骨干树
 [spliced_tree_mat, spliced_tree_edges] = build_balanced_tree(filtered_adj_mat_copy, source_node);
@@ -167,9 +219,8 @@ for depth = 0:max_spliced_depth
     end
 end
 
-% --------------------- 4.1 拼接骨干树上的简单拼接 ---------------------
-% 进行拼接骨干树上的简单拼接 - 类似深度2节点的简单拼接
-fprintf('\n--------------------- 拼接骨干树上的简单拼接 ---------------------\n');
+% ===================== 4. 拼接骨干树上的简单拼接 =====================
+% 进行拼接骨干树上的简单拼接 - 类似深度2节点的简单拼接，仅处理逻辑不打印
 spliced_backbone_simple_splice = spliced_simple_splice(filtered_adj_mat_copy, spliced_tree_nodes, spliced_node_depths, n);
 
 % 将拼接骨干树上的简单拼接信息添加到spliced_depth_info
@@ -445,6 +496,80 @@ for depth = 0:size(spliced_depth_stats, 1)-1
     else
         fprintf('无节点\n');
     end
+end
+
+% 2.1 连通骨干树节点检测信息
+fprintf('\n===================== 连通骨干树节点检测信息 =====================\n');
+fprintf('与源节点%d连通的总节点数：%d\n', source_node, length(connected_nodes));
+fprintf('其中骨干树节点数（不包括源节点%d）：%d\n', source_node, length(connected_backbone_nodes));
+
+if ~isempty(connected_backbone_nodes)
+    fprintf('需要断开连接的骨干树节点：');
+    fprintf('%d ', connected_backbone_nodes);
+    fprintf('\n');
+    
+    % 统计每个需要断开的节点的连接数
+    fprintf('\n各骨干树节点的连接情况：\n');
+    
+    for node = connected_backbone_nodes'
+        % 找到与该节点相连的所有边（原始拓扑中的连接）
+        connected_edges = find(filtered_adj_mat(node, :) > 0 | filtered_adj_mat(:, node)' > 0);
+        fprintf('骨干树节点 %d 的连接数：%d，连接到的节点：', node, length(connected_edges));
+        
+        if ~isempty(connected_edges)
+            fprintf('%d ', connected_edges);
+        else
+            fprintf('无连接');
+        end
+        fprintf('\n');
+    end
+    
+    fprintf('\n总共断开了%d条边\n', total_edges_removed);
+else
+    fprintf('未发现与源节点连通的骨干树节点，无需断开连接\n');
+end
+
+% 2.2 拼接骨干树上的简单拼接信息
+fprintf('\n===================== 拼接骨干树上的简单拼接 =====================\n');
+if ~isempty(spliced_backbone_simple_splice.nodes)
+    fprintf('参与简单拼接的拼接骨干树节点：\n');
+    fprintf('%d ', sort(spliced_backbone_simple_splice.nodes));
+    fprintf('（共%d个节点）\n', length(spliced_backbone_simple_splice.nodes));
+    
+    % 检查depth2_spliced_info字段是否存在
+    if isfield(spliced_backbone_simple_splice, 'depth2_spliced_info')
+        % 检查spliced_nodes字段是否存在
+        if isfield(spliced_backbone_simple_splice.depth2_spliced_info, 'spliced_nodes') && ...
+           ~isempty(spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes)
+            fprintf('\n拼接得到的节点：\n');
+            fprintf('%d ', sort(spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes));
+            fprintf('（共%d个节点）\n', length(spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes));
+        else
+            fprintf('\n无拼接得到的节点\n');
+        end
+    else
+        fprintf('\n无拼接得到的节点信息\n');
+    end
+    
+    if isfield(spliced_backbone_simple_splice, 'edges') && ~isempty(spliced_backbone_simple_splice.edges)
+        fprintf('\n拼接路径：\n');
+        for i = 1:size(spliced_backbone_simple_splice.edges, 1)
+            fprintf('节点 %d -> 节点 %d', ...
+                spliced_backbone_simple_splice.edges(i,1), ...
+                spliced_backbone_simple_splice.edges(i,2));
+            
+            % 检查weights字段是否存在
+            if isfield(spliced_backbone_simple_splice, 'weights') && ...
+               length(spliced_backbone_simple_splice.weights) >= i
+                fprintf(' (权重: %.2f)', spliced_backbone_simple_splice.weights(i));
+            end
+            fprintf('\n');
+        end
+    else
+        fprintf('\n无拼接路径\n');
+    end
+else
+    fprintf('没有可进行简单拼接的拼接骨干树节点\n');
 end
 
 % 3. 次级拼接信息
