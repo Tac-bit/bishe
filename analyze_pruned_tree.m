@@ -338,6 +338,11 @@ if ~isempty(competition_nodes)
             common_nodes = intersect(tree_info.global_depth_info.depth3_nodes, competition_nodes);
             if ~isempty(common_nodes)
                 % 确保竞争节点保留在该树中
+                % 确保两个数组都是列向量
+                tree_info.global_depth_info.depth3_nodes = tree_info.global_depth_info.depth3_nodes(:);
+                common_nodes = common_nodes(:);
+                
+                % 合并并确保结果是列向量
                 tree_info.global_depth_info.depth3_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
                 secondary_spliced_info.trees{i} = tree_info;
                 
@@ -346,7 +351,8 @@ if ~isempty(competition_nodes)
                 local_tree_mat = tree_info.tree_mat;
                 for node = common_nodes'
                     connected_nodes = find(local_tree_mat(node, :) > 0 | local_tree_mat(:, node)' > 0);
-                    for conn_node = connected_nodes
+                    connected_nodes = connected_nodes(:);  % 确保是列向量
+                    for conn_node = connected_nodes'
                         if conn_node ~= node
                             edge = sort([node, conn_node]); % 排序确保边的一致性
                             % 确保这条边被标记为次级拼接边
@@ -356,6 +362,21 @@ if ~isempty(competition_nodes)
                         end
                     end
                 end
+                
+                % 更新次级拼接树的全局深度信息
+                if ~isfield(secondary_spliced_info, 'depth3_nodes')
+                    secondary_spliced_info.depth3_nodes = [];
+                end
+                
+                % 确保数组是列向量
+                if ~isempty(secondary_spliced_info.depth3_nodes)
+                    secondary_spliced_info.depth3_nodes = secondary_spliced_info.depth3_nodes(:);
+                end
+                common_nodes = common_nodes(:);
+                
+                % 连接并确保结果是列向量
+                secondary_spliced_info.depth3_nodes = unique([secondary_spliced_info.depth3_nodes; common_nodes]);
+                secondary_spliced_info.depth3_nodes = secondary_spliced_info.depth3_nodes(:);
             end
         end
     end
@@ -430,14 +451,30 @@ if isfield(spliced_depth_info, 'competition_info') && ~isempty(spliced_depth_inf
             common_nodes = intersect(tree_info.global_depth_info.depth3_nodes, competition_nodes);
             if ~isempty(common_nodes)
                 % 确保竞争节点保留在该树中
+                % 确保两个数组都是列向量
+                tree_info.global_depth_info.depth3_nodes = tree_info.global_depth_info.depth3_nodes(:);
+                common_nodes = common_nodes(:);
+                
+                % 合并并确保结果是列向量
                 tree_info.global_depth_info.depth3_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
                 secondary_spliced_info.trees{i} = tree_info;
                 
-                % 更新次级拼接树的全局深度信息
-                if ~isfield(secondary_spliced_info, 'depth3_nodes')
-                    secondary_spliced_info.depth3_nodes = [];
+                % 确保竞争节点的所有相关边都正确更新
+                % 在次级拼接树中找到与竞争节点相连的所有节点和边
+                local_tree_mat = tree_info.tree_mat;
+                for node = common_nodes'
+                    connected_nodes = find(local_tree_mat(node, :) > 0 | local_tree_mat(:, node)' > 0);
+                    connected_nodes = connected_nodes(:);  % 确保是列向量
+                    for conn_node = connected_nodes'
+                        if conn_node ~= node
+                            edge = sort([node, conn_node]); % 排序确保边的一致性
+                            % 确保这条边被标记为次级拼接边
+                            if ~ismember(edge, competition_info.secondary_edges, 'rows')
+                                competition_info.secondary_edges = [competition_info.secondary_edges; edge];
+                            end
+                        end
+                    end
                 end
-                secondary_spliced_info.depth3_nodes = unique([secondary_spliced_info.depth3_nodes; common_nodes]);
             end
             secondary_depth3_nodes = unique([secondary_depth3_nodes; tree_info.global_depth_info.depth3_nodes(:)]);
         end
