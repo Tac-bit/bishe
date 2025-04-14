@@ -87,55 +87,132 @@ for i = 1:n
 end
 
 % ===================== 3.5 检测与源节点连通的骨干树节点 =====================
-% 构建图并查找与源节点连通的所有节点
-filtered_graph = graph(filtered_adj_mat_copy);
+% 初始化连通性检测相关变量，确保在条件分支外也能访问
 connected_nodes = [];
+connected_backbone_nodes = [];
+total_edges_removed = 0;
+edges_removed = [];
 
-% 使用BFS找出与源节点连通的所有节点
-visited = false(n, 1);
-queue = source_node;
-visited(source_node) = true;
-connected_nodes = [connected_nodes; source_node];
+% 先构建拼接骨干树，用于判断是否有节点交集
+[temp_spliced_tree_mat, temp_spliced_tree_edges] = build_balanced_tree(filtered_adj_mat_copy, source_node);
+[temp_spliced_pruned_mat, temp_spliced_paths] = prune_balanced_tree(temp_spliced_tree_mat, temp_spliced_tree_edges, source_node);
+temp_spliced_tree_nodes = unique(cell2mat(temp_spliced_paths));
 
-while ~isempty(queue)
-    current = queue(1);
-    queue(1) = [];
-    
-    neighbors = find(filtered_adj_mat_copy(current, :) > 0);
-    for neighbor = neighbors
-        if ~visited(neighbor)
-            visited(neighbor) = true;
-            connected_nodes = [connected_nodes; neighbor];
-            queue = [queue, neighbor];
-        end
-    end
+% 检查拼接骨干树节点与原骨干树节点是否有交集
+nodes_intersection = intersect(temp_spliced_tree_nodes, tree_nodes);
+
+% 如果交集只包含源节点，则不算有交集
+if length(nodes_intersection) == 1 && nodes_intersection(1) == source_node
+    nodes_intersection = [];
+    fprintf('拼接骨干树与原骨干树的交集仅为源节点%d，不执行连通性检测\n', source_node);
 end
 
-% 找出连通节点中的骨干树节点
-connected_backbone_nodes = intersect(connected_nodes, tree_nodes);
-connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+% 只有当存在交集时才执行连通性检测和断开连接操作
+if ~isempty(nodes_intersection)
+    fprintf('发现拼接骨干树与原骨干树有%d个节点交集，执行连通性检测和断开连接\n', length(nodes_intersection));
+    fprintf('交集节点为: ');
+    fprintf('%d ', nodes_intersection);
+    fprintf('\n');
+    
+    % 构建图并查找与源节点连通的所有节点
+    filtered_graph = graph(filtered_adj_mat_copy);
+    connected_nodes = [];
 
-% 排除源节点
-connected_backbone_nodes = setdiff(connected_backbone_nodes, source_node);
-connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+    % 使用BFS找出与源节点连通的所有节点
+    visited = false(n, 1);
+    queue = source_node;
+    visited(source_node) = true;
+    connected_nodes = [connected_nodes; source_node];
 
-% 初始化断开的边数量计数器
-total_edges_removed = 0;
-
-if ~isempty(connected_backbone_nodes)
-    for node = connected_backbone_nodes'
-        % 找到与该节点相连的所有边
-        connected_edges = find(filtered_adj_mat_copy(node, :) > 0);
+    while ~isempty(queue)
+        current = queue(1);
+        queue(1) = [];
         
-        if ~isempty(connected_edges)
-            % 断开所有连接
-            for conn_node = connected_edges
-                filtered_adj_mat_copy(node, conn_node) = 0;
-                filtered_adj_mat_copy(conn_node, node) = 0;
-                total_edges_removed = total_edges_removed + 1;
+        neighbors = find(filtered_adj_mat_copy(current, :) > 0);
+        for neighbor = neighbors
+            if ~visited(neighbor)
+                visited(neighbor) = true;
+                connected_nodes = [connected_nodes; neighbor];
+                queue = [queue, neighbor];
             end
         end
     end
+
+    % 找出连通节点中的骨干树节点
+    connected_backbone_nodes = intersect(connected_nodes, tree_nodes);
+    connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+
+    % 排除源节点
+    connected_backbone_nodes = setdiff(connected_backbone_nodes, source_node);
+    connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+
+    % 初始化断开的边数量计数器和断开的边列表
+    total_edges_removed = 0;
+    edges_removed = [];
+
+    if ~isempty(connected_backbone_nodes)
+        fprintf('需要断开连接的骨干树节点：');
+        fprintf('%d ', connected_backbone_nodes);
+        fprintf('\n');
+        
+        for node = connected_backbone_nodes'
+            % 找到与该节点相连的所有边
+            connected_edges = find(filtered_adj_mat_copy(node, :) > 0);
+            
+            if ~isempty(connected_edges)
+                % 断开所有连接
+                for conn_node = connected_edges
+                    filtered_adj_mat_copy(node, conn_node) = 0;
+                    filtered_adj_mat_copy(conn_node, node) = 0;
+                    total_edges_removed = total_edges_removed + 1;
+                    edges_removed = [edges_removed; node, conn_node];
+                end
+            end
+        end
+        
+        % 输出断开的边
+        fprintf('断开的边详情：\n');
+        for i = 1:size(edges_removed, 1)
+            fprintf('节点 %d -- 节点 %d\n', edges_removed(i, 1), edges_removed(i, 2));
+        end
+    end
+    
+    fprintf('连通性检测完成，断开了%d条边\n', total_edges_removed);
+else
+    fprintf('拼接骨干树与原骨干树没有节点交集，跳过连通性检测\n');
+    % 在这种情况下，为了避免后续引用错误，我们需要获取连通节点信息
+    % 虽然不需要断开连接，但仍然需要计算连通性统计
+    
+    % 构建图并查找与源节点连通的所有节点
+    filtered_graph = graph(filtered_adj_mat_copy);
+    
+    % 使用BFS找出与源节点连通的所有节点
+    visited = false(n, 1);
+    queue = source_node;
+    visited(source_node) = true;
+    connected_nodes = [connected_nodes; source_node];
+
+    while ~isempty(queue)
+        current = queue(1);
+        queue(1) = [];
+        
+        neighbors = find(filtered_adj_mat_copy(current, :) > 0);
+        for neighbor = neighbors
+            if ~visited(neighbor)
+                visited(neighbor) = true;
+                connected_nodes = [connected_nodes; neighbor];
+                queue = [queue, neighbor];
+            end
+        end
+    end
+    
+    % 找出连通节点中的骨干树节点，用于统计但不断开连接
+    connected_backbone_nodes = intersect(connected_nodes, tree_nodes);
+    connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
+    
+    % 排除源节点
+    connected_backbone_nodes = setdiff(connected_backbone_nodes, source_node);
+    connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
 end
 
 % ===================== 4. 拼接骨干树（深度为0的骨干树节点拼接） =====================
