@@ -400,6 +400,73 @@ end
 % 执行简单拼接
 simple_spliced_info = simple_splice(filtered_adj_mat_copy, tree_nodes, node_depths, n, spliced_tree_nodes);
 
+% ===================== 6.5 次级拼接与简单拼接竞争处理 =====================
+% 检测次级拼接和简单拼接之间的节点竞争，并将拼接权让渡给次级拼接
+secondary_splice_nodes = [];
+if ~isempty(secondary_spliced_info.trees)
+    for i = 1:length(secondary_spliced_info.trees)
+        tree_info = secondary_spliced_info.trees{i};
+        if isfield(tree_info.global_depth_info, 'depth3_nodes')
+            secondary_splice_nodes = [secondary_splice_nodes; tree_info.global_depth_info.depth3_nodes(:)];
+        end
+    end
+    secondary_splice_nodes = unique(secondary_splice_nodes);
+    secondary_splice_nodes = secondary_splice_nodes(:);  % 确保是列向量
+end
+
+% 获取简单拼接节点
+simple_splice_nodes = [];
+if isfield(simple_spliced_info, 'depth2_spliced_info') && isfield(simple_spliced_info.depth2_spliced_info, 'spliced_nodes')
+    simple_splice_nodes = simple_spliced_info.depth2_spliced_info.spliced_nodes(:);
+end
+
+% 检测竞争节点 - 同时被次级拼接和简单拼接的节点
+if ~isempty(secondary_splice_nodes) && ~isempty(simple_splice_nodes)
+    conflict_nodes = intersect(secondary_splice_nodes, simple_splice_nodes);
+    conflict_nodes = conflict_nodes(:);  % 确保是列向量
+    
+    if ~isempty(conflict_nodes)
+        % 记录竞争信息
+        sec_simple_competition_info = struct();
+        sec_simple_competition_info.nodes = conflict_nodes;
+        sec_simple_competition_info.edges_removed = [];
+        
+        % 从简单拼接中移除竞争节点
+        if isfield(simple_spliced_info, 'edges') && ~isempty(simple_spliced_info.edges)
+            edges_to_remove = [];
+            for i = 1:size(simple_spliced_info.edges, 1)
+                edge = simple_spliced_info.edges(i, :);
+                if any(ismember(edge, conflict_nodes))
+                    edges_to_remove = [edges_to_remove; i];
+                    sec_simple_competition_info.edges_removed = [sec_simple_competition_info.edges_removed; edge];
+                end
+            end
+            
+            % 从简单拼接的边中移除竞争边
+            if ~isempty(edges_to_remove)
+                simple_spliced_info.edges(edges_to_remove, :) = [];
+                % 同时更新权重
+                if isfield(simple_spliced_info, 'weights') && ~isempty(simple_spliced_info.weights)
+                    simple_spliced_info.weights(edges_to_remove) = [];
+                end
+            end
+        end
+        
+        % 从简单拼接的拼接节点中移除竞争节点
+        if isfield(simple_spliced_info, 'depth2_spliced_info') && isfield(simple_spliced_info.depth2_spliced_info, 'spliced_nodes')
+            simple_spliced_info.depth2_spliced_info.spliced_nodes = setdiff(simple_spliced_info.depth2_spliced_info.spliced_nodes, conflict_nodes);
+        end
+        
+        % 从all_spliced_nodes中移除竞争节点
+        if isfield(simple_spliced_info, 'all_spliced_nodes')
+            simple_spliced_info.all_spliced_nodes = setdiff(simple_spliced_info.all_spliced_nodes, conflict_nodes);
+        end
+        
+        % 存储竞争信息
+        simple_spliced_info.sec_simple_competition_info = sec_simple_competition_info;
+    end
+end
+
 % ===================== 7. 数据汇总 =====================
 % 创建深度信息结构体
 depth_info = struct();
@@ -660,6 +727,29 @@ if ~isempty(simple_spliced_info.edges)
     end
 else
     fprintf('无拼接路径\n');
+end
+
+% 4.5 次级拼接与简单拼接竞争信息
+if isfield(simple_spliced_info, 'sec_simple_competition_info') && ~isempty(simple_spliced_info.sec_simple_competition_info.nodes)
+    fprintf('\n===================== 次级拼接与简单拼接竞争信息 =====================\n');
+    conflict_nodes = simple_spliced_info.sec_simple_competition_info.nodes;
+    fprintf('检测到以下节点同时被次级拼接和简单拼接所拼接：\n');
+    fprintf('%d ', sort(conflict_nodes));
+    fprintf('\n共%d个竞争节点\n', length(conflict_nodes));
+    
+    % 打印被移除的边
+    if ~isempty(simple_spliced_info.sec_simple_competition_info.edges_removed)
+        fprintf('\n从简单拼接中移除的边：\n');
+        removed_edges = simple_spliced_info.sec_simple_competition_info.edges_removed;
+        for i = 1:size(removed_edges, 1)
+            fprintf('节点 %d -> 节点 %d\n', ...
+                removed_edges(i,1), ...
+                removed_edges(i,2));
+        end
+        fprintf('共移除%d条边\n', size(removed_edges, 1));
+    end
+    
+    fprintf('\n处理节点竞争：将竞争节点的拼接权让渡给次级拼接\n');
 end
 
 % 5. 数值量化部分 - 汇总率统计
