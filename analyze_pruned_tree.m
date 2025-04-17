@@ -544,6 +544,81 @@ if ~isempty(secondary_splice_nodes) && ~isempty(simple_splice_nodes)
     end
 end
 
+% ===================== 6.75 拼接骨干树上的简单拼接与普通简单拼接竞争处理 =====================
+% 检测拼接骨干树上的简单拼接与普通简单拼接之间的节点竞争
+% 当存在竞争时，拼接骨干树上的简单拼接具有更高优先级
+
+% 获取拼接骨干树上的简单拼接节点
+spliced_backbone_simple_nodes = [];
+if isfield(spliced_depth_info, 'simple_splice_info') && ...
+   isfield(spliced_depth_info.simple_splice_info, 'depth2_spliced_info') && ...
+   isfield(spliced_depth_info.simple_splice_info.depth2_spliced_info, 'spliced_nodes')
+    spliced_backbone_simple_nodes = spliced_depth_info.simple_splice_info.depth2_spliced_info.spliced_nodes(:);
+end
+
+% 获取普通简单拼接节点
+simple_spliced_nodes = [];
+if isfield(simple_spliced_info, 'depth2_spliced_info') && ...
+   isfield(simple_spliced_info.depth2_spliced_info, 'spliced_nodes')
+    simple_spliced_nodes = simple_spliced_info.depth2_spliced_info.spliced_nodes(:);
+end
+
+% 检测节点竞争
+if ~isempty(spliced_backbone_simple_nodes) && ~isempty(simple_spliced_nodes)
+    competition_nodes = intersect(spliced_backbone_simple_nodes, simple_spliced_nodes);
+    competition_nodes = competition_nodes(:);  % 确保是列向量
+    
+    if ~isempty(competition_nodes)
+        fprintf('\n===================== 拼接骨干树简单拼接与普通简单拼接竞争 =====================\n');
+        fprintf('发现%d个节点同时被拼接骨干树简单拼接和普通简单拼接所占用\n', length(competition_nodes));
+        fprintf('竞争节点为: ');
+        fprintf('%d ', competition_nodes);
+        fprintf('\n根据优先级原则，这些节点归属于拼接骨干树的简单拼接\n');
+        
+        % 创建竞争信息结构体
+        spliced_simple_competition_info = struct();
+        spliced_simple_competition_info.nodes = competition_nodes;
+        spliced_simple_competition_info.edges_removed = [];
+        
+        % 从普通简单拼接中移除竞争节点
+        if isfield(simple_spliced_info, 'edges') && ~isempty(simple_spliced_info.edges)
+            edges_to_remove = [];
+            for i = 1:size(simple_spliced_info.edges, 1)
+                edge = simple_spliced_info.edges(i, :);
+                if any(ismember(edge, competition_nodes))
+                    edges_to_remove = [edges_to_remove; i];
+                    spliced_simple_competition_info.edges_removed = [spliced_simple_competition_info.edges_removed; edge];
+                end
+            end
+            
+            % 从简单拼接的边集合中移除与竞争节点相关的边
+            if ~isempty(edges_to_remove)
+                fprintf('从普通简单拼接中移除%d条与竞争节点相关的边\n', length(edges_to_remove));
+                simple_spliced_info.edges(edges_to_remove, :) = [];
+                
+                % 同时更新权重
+                if isfield(simple_spliced_info, 'weights') && ~isempty(simple_spliced_info.weights)
+                    simple_spliced_info.weights(edges_to_remove) = [];
+                end
+            end
+        end
+        
+        % 从普通简单拼接的节点集合中移除竞争节点
+        if isfield(simple_spliced_info, 'depth2_spliced_info') && isfield(simple_spliced_info.depth2_spliced_info, 'spliced_nodes')
+            fprintf('从普通简单拼接的节点集合中移除%d个竞争节点\n', length(competition_nodes));
+            simple_spliced_info.depth2_spliced_info.spliced_nodes = setdiff(simple_spliced_info.depth2_spliced_info.spliced_nodes, competition_nodes);
+        end
+        
+        % 从all_spliced_nodes中移除竞争节点
+        if isfield(simple_spliced_info, 'all_spliced_nodes')
+            simple_spliced_info.all_spliced_nodes = setdiff(simple_spliced_info.all_spliced_nodes, competition_nodes);
+        end
+        
+        % 保存竞争信息
+        simple_spliced_info.spliced_simple_competition_info = spliced_simple_competition_info;
+    end
+end
+
 % ===================== 7. 数据汇总 =====================
 % 创建深度信息结构体
 depth_info = struct();
