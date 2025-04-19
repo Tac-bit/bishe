@@ -42,11 +42,41 @@ visualize_pruned_tree(pruned_tree_mat, pruned_paths, source_node);
 visualize_tree_on_filtered(filtered_adj_mat, pruned_tree_mat, pruned_paths, threshold, source_node);
 
 % 分析修剪后的骨干树并进行特殊过滤
-[filtered_adj_mat_copy, tree_nodes, depth_stats, depth_info, spliced_depth_info, simple_spliced_info] = analyze_pruned_tree(pruned_tree_mat, pruned_paths, source_node, filtered_adj_mat);
+[filtered_adj_mat_copy, tree_nodes, depth_stats, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info] = analyze_pruned_tree(pruned_tree_mat, pruned_paths, source_node, filtered_adj_mat);
 
 % 可视化结果
 visualize_tree(filtered_adj_mat_copy, depth_info, spliced_depth_info, simple_spliced_info);
 
 % 综合可视化所有树结构
-visualize_all_trees(filtered_adj_mat, depth_info, spliced_depth_info, simple_spliced_info, pruned_tree_mat);
+% 使用正确的参数顺序调用
+visualize_all_trees(filtered_adj_mat, depth_info, spliced_depth_info, simple_spliced_info, pruned_tree_mat, secondary_spliced_info);
+
+% 打印各种树结构的节点和边信息汇总
+print_tree_summary(filtered_adj_mat, tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info, source_node, pruned_paths);
+
+% ===================== 可视化综合树结构 =====================
+% 可视化综合树结构 (包含所有节点和边)
+fprintf('\n正在生成综合树可视化...\n');
+visualize_integrated_tree(filtered_adj_mat, tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info, source_node, pruned_paths);
+fprintf('综合树可视化完成!\n');
+
+% ===================== 计算树的性能和数据汇聚时间 =====================
+fprintf('\n开始计算树的性能和数据汇聚时间...\n');
+
+% 设置数据大小和汇聚时间参数
+data_size = 1000;  % 数据大小单位可为MB或KB
+gather_time = 5;   % 数据汇聚固定时间，单位可为ms或s
+
+% 调用函数计算树的性能和数据汇聚时间
+[node_times, total_time] = calculate_tree_performance(filtered_adj_mat, tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info, source_node, pruned_paths, data_size, gather_time);
+
+fprintf('树的性能和数据汇聚时间计算完成!\n');
+fprintf('源节点 %d 的数据汇聚总时间: %.2f\n', source_node, total_time);
+
+% ===================== 可视化带时间信息的综合树结构 =====================
+fprintf('\n正在生成带时间信息的综合树可视化...\n');
+visualize_integrated_tree(filtered_adj_mat, tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info, source_node, pruned_paths, node_times);
+fprintf('带时间信息的综合树可视化完成!\n');
+
+
 

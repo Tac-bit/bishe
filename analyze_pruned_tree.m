@@ -1,4 +1,4 @@
-function [filtered_adj_mat_copy, tree_nodes, depth_stats, depth_info, spliced_depth_info, simple_spliced_info] = analyze_pruned_tree(pruned_tree_mat, pruned_paths, source_node, filtered_adj_mat)
+function [filtered_adj_mat_copy, tree_nodes, depth_stats, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info] = analyze_pruned_tree(pruned_tree_mat, pruned_paths, source_node, filtered_adj_mat)
 % 特殊过滤规则
 % 输入:
 %   pruned_tree_mat: 修剪后的骨干树邻接矩阵
@@ -12,6 +12,7 @@ function [filtered_adj_mat_copy, tree_nodes, depth_stats, depth_info, spliced_de
 %   depth_info: 包含不同深度节点的结构体
 %   spliced_depth_info: 拼接骨干树的深度节点信息结构体
 %   simple_spliced_info: 简单拼接的信息结构体
+%   secondary_spliced_info: 次级拼接的信息结构体
 
 % ===================== 1. 初始化 =====================
 % 创建过滤矩阵的副本，确保不修改原始数据
@@ -215,9 +216,43 @@ else
     connected_backbone_nodes = connected_backbone_nodes(:); % 确保是列向量
 end
 
-% ===================== 4. 拼接骨干树（深度为0的骨干树节点拼接） =====================
-% 在特殊过滤拓扑上构建拼接骨干树
-[spliced_tree_mat, spliced_tree_edges] = build_balanced_tree(filtered_adj_mat_copy, source_node);
+% ===================== 4. 拼接骨干树 =====================
+% 在生成拼接骨干树之前，先预处理过滤拓扑，断开与骨干树深度2、3节点的连接
+filtered_adj_mat_for_splice = filtered_adj_mat_copy;
+
+% 获取骨干树中深度为2和3的节点
+depth2_backbone_nodes = tree_nodes(node_depths(tree_nodes) == 2);
+depth3_backbone_nodes = tree_nodes(node_depths(tree_nodes) == 3);
+
+% 确保两个数组都是列向量
+if isempty(depth2_backbone_nodes)
+    depth2_backbone_nodes = [];
+elseif size(depth2_backbone_nodes, 1) == 1
+    depth2_backbone_nodes = depth2_backbone_nodes';
+end
+
+if isempty(depth3_backbone_nodes)
+    depth3_backbone_nodes = [];
+elseif size(depth3_backbone_nodes, 1) == 1
+    depth3_backbone_nodes = depth3_backbone_nodes';
+end
+
+% 连接数组
+nodes_to_disconnect = [depth2_backbone_nodes; depth3_backbone_nodes];
+
+% 断开这些节点的连接
+fprintf('预处理：断开骨干树中深度2和深度3节点的连接，共%d个节点\n', length(nodes_to_disconnect));
+for node = nodes_to_disconnect'
+    % 找到与该节点相连的所有边
+    connected_nodes = find(filtered_adj_mat_for_splice(node, :) > 0);
+    for conn_node = connected_nodes
+        filtered_adj_mat_for_splice(node, conn_node) = 0;
+        filtered_adj_mat_for_splice(conn_node, node) = 0;
+    end
+end
+
+% 在预处理后的拓扑上构建拼接骨干树
+[spliced_tree_mat, spliced_tree_edges] = build_balanced_tree(filtered_adj_mat_for_splice, source_node);
 [spliced_pruned_mat, spliced_paths] = prune_balanced_tree(spliced_tree_mat, spliced_tree_edges, source_node);
 
 % 获取拼接骨干树中的所有节点
@@ -296,12 +331,65 @@ for depth = 0:max_spliced_depth
     end
 end
 
-% ===================== 4. 拼接骨干树上的简单拼接 =====================
+% ===================== 4.5 拼接骨干树上的简单拼接 =====================
 % 进行拼接骨干树上的简单拼接 - 类似深度2节点的简单拼接，仅处理逻辑不打印
 spliced_backbone_simple_splice = spliced_simple_splice(filtered_adj_mat_copy, spliced_tree_nodes, spliced_node_depths, n);
 
 % 将拼接骨干树上的简单拼接信息添加到spliced_depth_info
 spliced_depth_info.simple_splice_info = spliced_backbone_simple_splice;
+
+% 将拼接骨干树上的简单拼接节点归类为深度3节点
+if isfield(spliced_backbone_simple_splice, 'depth2_spliced_info') && isfield(spliced_backbone_simple_splice.depth2_spliced_info, 'spliced_nodes')
+    spliced_depth3_nodes = spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes(:);
+    
+    % 更新深度3节点集合
+    if isfield(spliced_depth_info, 'depth3_nodes')
+        spliced_depth_info.depth3_nodes = unique([spliced_depth_info.depth3_nodes(:); spliced_depth3_nodes]);
+    else
+        spliced_depth_info.depth3_nodes = spliced_depth3_nodes;
+    end
+    
+    fprintf('将拼接骨干树上的简单拼接获得的%d个节点归类为深度3节点\n', length(spliced_depth3_nodes));
+    
+    % 更新拼接骨干树上简单拼接的边信息
+    if isfield(spliced_backbone_simple_splice, 'edges') && ~isempty(spliced_backbone_simple_splice.edges)
+        % 添加边到拼接骨干树的边集合
+        spliced_depth_info.tree_edges = [spliced_depth_info.tree_edges; spliced_backbone_simple_splice.edges];
+        
+        % 对新添加的边进行深度标记
+        fprintf('更新拼接骨干树边的深度信息，添加了%d条从深度2到深度3的边：\n', size(spliced_backbone_simple_splice.edges, 1));
+        for i = 1:size(spliced_backbone_simple_splice.edges, 1)
+            edge = spliced_backbone_simple_splice.edges(i, :);
+            node1 = edge(1);
+            node2 = edge(2);
+            
+            % 确定每个节点的深度
+            depth1 = spliced_node_depths(node1);
+            depth2 = spliced_node_depths(node2);
+            
+            % 对于简单拼接，我们知道一个节点是深度2，另一个是深度3
+            if depth1 == 2 || depth2 == -1  % 如果node2深度未定义，假设它是新拼接的深度3节点
+                from_node = node1;
+                to_node = node2;
+                % 更新深度信息
+                spliced_node_depths(to_node) = 3;
+            else  % node1可能是新拼接的节点
+                from_node = node2;
+                to_node = node1;
+                % 更新深度信息
+                spliced_node_depths(to_node) = 3;
+            end
+            
+            fprintf('  深度2节点 %d -> 深度3节点 %d', from_node, to_node);
+            
+            % 如果有权重信息，也输出
+            if isfield(spliced_backbone_simple_splice, 'weights') && length(spliced_backbone_simple_splice.weights) >= i
+                fprintf(' (权重: %.2f)', spliced_backbone_simple_splice.weights(i));
+            end
+            fprintf('\n');
+        end
+    end
+end
 
 % ===================== 5. 次级拼接（深度为1的骨干树节点拼接） =====================
 % 获取所有骨干树内的深度1节点
@@ -416,11 +504,36 @@ if ~isempty(competition_nodes)
             if ~isempty(common_nodes)
                 % 确保竞争节点保留在该树中
                 % 确保两个数组都是列向量
-                tree_info.global_depth_info.depth3_nodes = tree_info.global_depth_info.depth3_nodes(:);
-                common_nodes = common_nodes(:);
+                fprintf('合并前 depth3_nodes 大小: %dx%d\n', size(tree_info.global_depth_info.depth3_nodes, 1), size(tree_info.global_depth_info.depth3_nodes, 2));
+                fprintf('合并前 common_nodes 大小: %dx%d\n', size(common_nodes, 1), size(common_nodes, 2));
+                
+                % 确保都是列向量
+                if ~isempty(tree_info.global_depth_info.depth3_nodes)
+                    tree_info.global_depth_info.depth3_nodes = tree_info.global_depth_info.depth3_nodes(:);
+                else
+                    tree_info.global_depth_info.depth3_nodes = [];
+                end
+                
+                if ~isempty(common_nodes)
+                    common_nodes = common_nodes(:);
+                else
+                    common_nodes = [];
+                end
                 
                 % 合并并确保结果是列向量
-                tree_info.global_depth_info.depth3_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
+                if ~isempty(tree_info.global_depth_info.depth3_nodes) && ~isempty(common_nodes)
+                    competitive_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
+                elseif ~isempty(tree_info.global_depth_info.depth3_nodes)
+                    competitive_nodes = tree_info.global_depth_info.depth3_nodes;
+                elseif ~isempty(common_nodes)
+                    competitive_nodes = common_nodes;
+                else
+                    competitive_nodes = [];
+                end
+                
+                tree_info.global_depth_info.depth3_nodes = competitive_nodes(:); % 确保结果是列向量
+                fprintf('合并后 depth3_nodes 大小: %dx%d\n', size(tree_info.global_depth_info.depth3_nodes, 1), size(tree_info.global_depth_info.depth3_nodes, 2));
+                
                 secondary_spliced_info.trees{i} = tree_info;
                 
                 % 确保竞争节点的所有相关边都正确更新
@@ -439,21 +552,6 @@ if ~isempty(competition_nodes)
                         end
                     end
                 end
-                
-                % 更新次级拼接树的全局深度信息
-                if ~isfield(secondary_spliced_info, 'depth3_nodes')
-                    secondary_spliced_info.depth3_nodes = [];
-                end
-                
-                % 确保数组是列向量
-                if ~isempty(secondary_spliced_info.depth3_nodes)
-                    secondary_spliced_info.depth3_nodes = secondary_spliced_info.depth3_nodes(:);
-                end
-                common_nodes = common_nodes(:);
-                
-                % 连接并确保结果是列向量
-                secondary_spliced_info.depth3_nodes = unique([secondary_spliced_info.depth3_nodes; common_nodes]);
-                secondary_spliced_info.depth3_nodes = secondary_spliced_info.depth3_nodes(:);
             end
         end
     end
@@ -671,11 +769,36 @@ if isfield(spliced_depth_info, 'competition_info') && ~isempty(spliced_depth_inf
             if ~isempty(common_nodes)
                 % 确保竞争节点保留在该树中
                 % 确保两个数组都是列向量
-                tree_info.global_depth_info.depth3_nodes = tree_info.global_depth_info.depth3_nodes(:);
-                common_nodes = common_nodes(:);
+                fprintf('合并前 depth3_nodes 大小: %dx%d\n', size(tree_info.global_depth_info.depth3_nodes, 1), size(tree_info.global_depth_info.depth3_nodes, 2));
+                fprintf('合并前 common_nodes 大小: %dx%d\n', size(common_nodes, 1), size(common_nodes, 2));
+                
+                % 确保都是列向量
+                if ~isempty(tree_info.global_depth_info.depth3_nodes)
+                    tree_info.global_depth_info.depth3_nodes = tree_info.global_depth_info.depth3_nodes(:);
+                else
+                    tree_info.global_depth_info.depth3_nodes = [];
+                end
+                
+                if ~isempty(common_nodes)
+                    common_nodes = common_nodes(:);
+                else
+                    common_nodes = [];
+                end
                 
                 % 合并并确保结果是列向量
-                tree_info.global_depth_info.depth3_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
+                if ~isempty(tree_info.global_depth_info.depth3_nodes) && ~isempty(common_nodes)
+                    competitive_nodes = unique([tree_info.global_depth_info.depth3_nodes; common_nodes]);
+                elseif ~isempty(tree_info.global_depth_info.depth3_nodes)
+                    competitive_nodes = tree_info.global_depth_info.depth3_nodes;
+                elseif ~isempty(common_nodes)
+                    competitive_nodes = common_nodes;
+                else
+                    competitive_nodes = [];
+                end
+                
+                tree_info.global_depth_info.depth3_nodes = competitive_nodes(:); % 确保结果是列向量
+                fprintf('合并后 depth3_nodes 大小: %dx%d\n', size(tree_info.global_depth_info.depth3_nodes, 1), size(tree_info.global_depth_info.depth3_nodes, 2));
+                
                 secondary_spliced_info.trees{i} = tree_info;
                 
                 % 确保竞争节点的所有相关边都正确更新
@@ -787,19 +910,19 @@ end
 
 % 2.2 拼接骨干树上的简单拼接信息
 fprintf('\n===================== 拼接骨干树上的简单拼接 =====================\n');
-if ~isempty(spliced_backbone_simple_splice.nodes)
+if isfield(spliced_depth_info, 'simple_splice_info') && isfield(spliced_depth_info.simple_splice_info, 'nodes') && ~isempty(spliced_depth_info.simple_splice_info.nodes)
     fprintf('参与简单拼接的拼接骨干树节点：\n');
-    fprintf('%d ', sort(spliced_backbone_simple_splice.nodes));
-    fprintf('（共%d个节点）\n', length(spliced_backbone_simple_splice.nodes));
+    fprintf('%d ', sort(spliced_depth_info.simple_splice_info.nodes));
+    fprintf('（共%d个节点）\n', length(spliced_depth_info.simple_splice_info.nodes));
     
     % 检查depth2_spliced_info字段是否存在
-    if isfield(spliced_backbone_simple_splice, 'depth2_spliced_info')
+    if isfield(spliced_depth_info.simple_splice_info, 'depth2_spliced_info')
         % 检查spliced_nodes字段是否存在
-        if isfield(spliced_backbone_simple_splice.depth2_spliced_info, 'spliced_nodes') && ...
-           ~isempty(spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes)
-            fprintf('\n拼接得到的节点：\n');
-            fprintf('%d ', sort(spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes));
-            fprintf('（共%d个节点）\n', length(spliced_backbone_simple_splice.depth2_spliced_info.spliced_nodes));
+        if isfield(spliced_depth_info.simple_splice_info.depth2_spliced_info, 'spliced_nodes') && ...
+           ~isempty(spliced_depth_info.simple_splice_info.depth2_spliced_info.spliced_nodes)
+            fprintf('\n拼接得到的深度3节点：\n');
+            fprintf('%d ', sort(spliced_depth_info.simple_splice_info.depth2_spliced_info.spliced_nodes));
+            fprintf('（共%d个节点）\n', length(spliced_depth_info.simple_splice_info.depth2_spliced_info.spliced_nodes));
         else
             fprintf('\n无拼接得到的节点\n');
         end
@@ -807,17 +930,27 @@ if ~isempty(spliced_backbone_simple_splice.nodes)
         fprintf('\n无拼接得到的节点信息\n');
     end
     
-    if isfield(spliced_backbone_simple_splice, 'edges') && ~isempty(spliced_backbone_simple_splice.edges)
-        fprintf('\n拼接路径：\n');
-        for i = 1:size(spliced_backbone_simple_splice.edges, 1)
-            fprintf('节点 %d -> 节点 %d', ...
-                spliced_backbone_simple_splice.edges(i,1), ...
-                spliced_backbone_simple_splice.edges(i,2));
+    if isfield(spliced_depth_info.simple_splice_info, 'edges') && ~isempty(spliced_depth_info.simple_splice_info.edges)
+        fprintf('\n拼接路径（深度2节点 -> 深度3节点）：\n');
+        for i = 1:size(spliced_depth_info.simple_splice_info.edges, 1)
+            % 判断哪个是深度2节点，哪个是深度3节点
+            edge = spliced_depth_info.simple_splice_info.edges(i, :);
+            node1 = edge(1);
+            node2 = edge(2);
+            
+            % 确定深度
+            if ismember(node1, spliced_depth_info.depth2_nodes) && ismember(node2, spliced_depth_info.depth3_nodes)
+                fprintf('深度2节点 %d -> 深度3节点 %d', node1, node2);
+            elseif ismember(node1, spliced_depth_info.depth3_nodes) && ismember(node2, spliced_depth_info.depth2_nodes)
+                fprintf('深度2节点 %d -> 深度3节点 %d', node2, node1);
+            else
+                fprintf('节点 %d -> 节点 %d', edge(1), edge(2));
+            end
             
             % 检查weights字段是否存在
-            if isfield(spliced_backbone_simple_splice, 'weights') && ...
-               length(spliced_backbone_simple_splice.weights) >= i
-                fprintf(' (权重: %.2f)', spliced_backbone_simple_splice.weights(i));
+            if isfield(spliced_depth_info.simple_splice_info, 'weights') && ...
+               length(spliced_depth_info.simple_splice_info.weights) >= i
+                fprintf(' (权重: %.2f)', spliced_depth_info.simple_splice_info.weights(i));
             end
             fprintf('\n');
         end
@@ -882,17 +1015,17 @@ else
 end
 
 % 4.5 次级拼接与简单拼接竞争信息
-if isfield(simple_spliced_info, 'sec_simple_competition_info') && ~isempty(simple_spliced_info.sec_simple_competition_info.nodes)
-    fprintf('\n===================== 次级拼接与简单拼接竞争信息 =====================\n');
-    conflict_nodes = simple_spliced_info.sec_simple_competition_info.nodes;
-    fprintf('检测到以下节点同时被次级拼接和简单拼接所拼接：\n');
+if isfield(simple_spliced_info, 'spliced_simple_competition_info') && isfield(simple_spliced_info.spliced_simple_competition_info, 'nodes') && ~isempty(simple_spliced_info.spliced_simple_competition_info.nodes)
+    fprintf('\n===================== 拼接骨干树简单拼接与普通简单拼接竞争信息 =====================\n');
+    conflict_nodes = simple_spliced_info.spliced_simple_competition_info.nodes;
+    fprintf('检测到以下节点同时被拼接骨干树简单拼接和普通简单拼接所占用：\n');
     fprintf('%d ', sort(conflict_nodes));
     fprintf('\n共%d个竞争节点\n', length(conflict_nodes));
     
     % 打印被移除的边
-    if ~isempty(simple_spliced_info.sec_simple_competition_info.edges_removed)
-        fprintf('\n从简单拼接中移除的边：\n');
-        removed_edges = simple_spliced_info.sec_simple_competition_info.edges_removed;
+    if isfield(simple_spliced_info.spliced_simple_competition_info, 'edges_removed') && ~isempty(simple_spliced_info.spliced_simple_competition_info.edges_removed)
+        fprintf('\n从普通简单拼接中移除的边：\n');
+        removed_edges = simple_spliced_info.spliced_simple_competition_info.edges_removed;
         for i = 1:size(removed_edges, 1)
             fprintf('节点 %d -> 节点 %d\n', ...
                 removed_edges(i,1), ...
@@ -901,7 +1034,7 @@ if isfield(simple_spliced_info, 'sec_simple_competition_info') && ~isempty(simpl
         fprintf('共移除%d条边\n', size(removed_edges, 1));
     end
     
-    fprintf('\n处理节点竞争：将竞争节点的拼接权让渡给次级拼接\n');
+    fprintf('\n处理节点竞争：根据优先级原则，这些节点归属于拼接骨干树的简单拼接\n');
 end
 
 % 5. 数值量化部分 - 汇总率统计
