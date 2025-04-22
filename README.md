@@ -333,4 +333,107 @@ spliced_info = struct(
 3. 可视化改进
    - 优化了边的显示顺序
    - 改进了节点的颜色方案
-   - 增强了图例的可读性 
+   - 增强了图例的可读性
+
+## 8. 数据汇聚时间分析功能
+
+### 8.1 数据汇聚时间计算
+系统新增了计算树结构中数据汇聚时间的功能，通过以下步骤实现：
+
+1. 参数设置
+   - 数据大小：默认设置为1000单位（可理解为MB或KB）
+   - 基础汇聚时间：默认为5单位时间（可理解为ms或s）
+
+2. 计算方法
+   - 基于树的深度结构计算数据从叶节点到源节点的传输时间
+   - 考虑边权重对传输速度的影响
+   - 综合考虑骨干树和拼接结构的不同传输特性
+
+3. 核心函数
+```matlab
+[node_times, total_time] = calculate_tree_performance(filtered_adj_mat, 
+    tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, 
+    secondary_spliced_info, source_node, pruned_paths, data_size, gather_time);
+```
+
+4. 输出结果
+   - node_times：每个节点的数据汇聚时间
+   - total_time：整体网络的数据汇聚总时间
+
+### 8.2 时间信息可视化
+系统提供了带时间信息的综合树可视化功能：
+
+1. 可视化实现
+```matlab
+visualize_integrated_tree(filtered_adj_mat, tree_nodes, depth_info, 
+    spliced_depth_info, simple_spliced_info, secondary_spliced_info, 
+    source_node, pruned_paths, node_times);
+```
+
+2. 可视化特点
+   - 保持节点颜色编码（深度0-3分别为红、紫、绿、蓝）
+   - 边的颜色区分（骨干树边为浅蓝色，拼接边为红色）
+   - 添加时间信息标签，显示数据传输耗时
+   - 节点大小可反映数据汇聚量或重要性
+
+## 9. 综合功能流程
+
+通过main.m主函数，系统按照以下流程执行全部功能：
+
+1. 初始化与数据准备
+   - 设置随机种子(rng(40))确保结果可复现
+   - 设置带宽阈值(threshold=40)和源节点(source_node=18)
+
+2. 拓扑生成与过滤
+   - 生成原始拓扑并可视化
+   - 根据阈值过滤并可视化
+
+3. 树结构构建
+   - 构建平衡二叉树并可视化
+   - 修剪树结构形成骨干树
+
+4. 拼接处理
+   - 分析骨干树并进行特殊过滤
+   - 进行简单拼接和次级拼接
+
+5. 综合可视化
+   - 显示不同类型的树结构
+   - 输出节点和边的统计信息
+
+6. 性能分析
+   - 计算数据汇聚时间
+   - 可视化带时间信息的综合树结构
+
+## 10. 使用示例
+
+### 10.1 基本使用
+直接运行main.m文件即可执行全部功能流程：
+```matlab
+% 在MATLAB命令窗口中执行
+run('main.m');
+```
+
+### 10.2 数据汇聚时间分析
+可以单独执行数据汇聚时间分析部分：
+```matlab
+% 设置参数
+data_size = 1000;  % 数据大小
+gather_time = 5;   % 基础汇聚时间
+
+% 计算汇聚时间
+[node_times, total_time] = calculate_tree_performance(filtered_adj_mat, 
+    tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, 
+    secondary_spliced_info, source_node, pruned_paths, data_size, gather_time);
+
+% 显示结果
+fprintf('源节点 %d 的数据汇聚总时间: %.2f\n', source_node, total_time);
+```
+
+### 10.3 带时间信息的可视化
+可以单独执行带时间信息的可视化：
+```matlab
+% 生成带时间信息的综合树可视化
+visualize_integrated_tree(filtered_adj_mat, tree_nodes, depth_info, 
+    spliced_depth_info, simple_spliced_info, secondary_spliced_info, 
+    source_node, pruned_paths, node_times);
+``` 

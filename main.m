@@ -63,14 +63,16 @@ fprintf('综合树可视化完成!\n');
 % ===================== 计算树的性能和数据汇聚时间 =====================
 fprintf('\n开始计算树的性能和数据汇聚时间...\n');
 
-% 设置数据大小和汇聚时间参数
-data_size = 1000;  % 数据大小单位可为MB或KB
-gather_time = 5;   % 数据汇聚固定时间，单位可为ms或s
+% 设置参数
+data_size = 1000;  % 数据大小
+gather_time = 5;   % 基础汇聚时间
 
-% 调用函数计算树的性能和数据汇聚时间
-[node_times, total_time] = calculate_tree_performance(filtered_adj_mat, tree_nodes, depth_info, spliced_depth_info, simple_spliced_info, secondary_spliced_info, source_node, pruned_paths, data_size, gather_time);
+% 计算汇聚时间
+[node_times, total_time] = calculate_tree_performance(filtered_adj_mat,...
+    tree_nodes, depth_info, spliced_depth_info, simple_spliced_info,...
+    secondary_spliced_info, source_node, pruned_paths, data_size, gather_time);
 
-fprintf('树的性能和数据汇聚时间计算完成!\n');
+% 显示结果
 fprintf('源节点 %d 的数据汇聚总时间: %.2f\n', source_node, total_time);
 
 % ===================== 可视化带时间信息的综合树结构 =====================
